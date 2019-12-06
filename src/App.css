@@ -29,11 +29,18 @@
 .App-frame{
     position:absolute;
     top:35px;
-    bottom: 35px;
+    bottom: 0px;
     left: 0;
     right: 0;
-    overflow: scroll;
+    
 
+}
+
+.App-content{
+  height: 100%;
+  width: 80%;
+  float: left;
+  
 }
 
 .App-footer{
@@ -104,14 +111,39 @@
   margin: 5px;
 }
 
-.boxlist {
-  overflow: scroll;
+.boxlist{
+  overflow: auto;
+  position: absolute;
+  top:0;
+  bottom: 0;
+  width: 80%;
+  padding: 5px;
+  margin-bottom: 10px;
+}
+
+.boxlist--raw {
+  border-collapse:collapse;
+  
+}
+
+.boxlist--html{
+  text-align: left;
+  
+}
+
+.boxlist__table{
+  border-collapse: collapse;
 }
 
 .boxlist__data{
-  width: 40%;
+  width: 30%;
 }
 
 .boxlist__content{
   width:auto;
+}
+
+.context_menu{
+  float: right;
+  width: 19%;
 }

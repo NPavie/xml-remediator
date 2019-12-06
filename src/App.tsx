@@ -28,6 +28,7 @@ import Remediation from './components/Remediation';
 import test_document from "./temp/document.json";
 import Box from './components/Box';
 import BoxTreeWalker from './components/BoxTreeWalker';
+import ContextualMenu from './components/ContextualMenu';
 
 
 /**
@@ -100,7 +101,6 @@ export default class App extends React.Component {
         output_content: "",
         applicable_remediations: new Array<Remediation>(),
         applied_remediations_stack: new Array<Remediation>(),
-        raw_viewer:<p>No viewer</p>,
         root_box:Box.parse(JSON.stringify(test_document))
     };
 
@@ -217,24 +217,19 @@ export default class App extends React.Component {
 
         let rootBox = new Box({
             attributes:this.state.root_box.props.attributes,
-                                type:this.state.root_box.props.type,
-                                name:this.state.root_box.props.name,
-                                children:this.state.root_box.props.children
+            type:this.state.root_box.props.type,
+            name:this.state.root_box.props.name,
+            children:this.state.root_box.props.children
         });
-        let walker:BoxTreeWalker = new BoxTreeWalker(rootBox);
+        let resultBox = rootBox;
+
+        
         
         return (
             <div className="App">
                 <ToastContainer />
                 <header className="App-header">
-
-                    <FileInput className="App-button"
-                        mimetype={getMimetypeAs<string>("expect.xhtml")}
-                        label="Input document : "
-                        onFileSubmit={(event: any) => { 
-                            this.handleFileSubmit(event) 
-                        }}
-                        eventRef={this.fileInput} />
+                    
                     
                     <button className="App-button"
                         onClick={(event: any) => {
@@ -243,23 +238,20 @@ export default class App extends React.Component {
                     
                 </header>
                 <main className="App-frame">
-                    <table className="boxlist">
-                        <tr>
-                            <th className="boxlist__data">Block data</th>
-                            <th className="boxlist__content">Textual content</th>
-                        </tr>
-                        <Box attributes={this.state.root_box.props.attributes}
-                                type={this.state.root_box.props.type}
-                                name={this.state.root_box.props.name}
-                                children={this.state.root_box.props.children}/>
-                    </table>
+                    <div className="App-content">
+                        <Box attributes={resultBox.props.attributes}
+                            type={resultBox.props.type}
+                            name={resultBox.props.name}
+                            children={resultBox.props.children}
+                            render_html={!this.state.raw_mode}/>
+                    </div>
+                    <ContextualMenu className="App-context_menu"/>
                 </main>
                 <footer className="App-footer" />
             </div>
         );
     }
 }
-
 
 
 /**
@@ -279,7 +271,16 @@ export default class App extends React.Component {
  */
 
 /** Code backup
- * 
+ * loading document
+ <FileInput className="App-button"
+                        mimetype={getMimetypeAs<string>("expect.xhtml")}
+                        label="Input document : "
+                        onFileSubmit={(event: any) => { 
+                            this.handleFileSubmit(event) 
+                        }}
+                        eventRef={this.fileInput} />
+
+xml viewer
  let remediations_viewer;
         if (this.state.raw_mode === true) {
             let filename = this.state.input_file === "" ? "expected.xhtml" : this.state.input_file;
