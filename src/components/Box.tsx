@@ -33,6 +33,7 @@ export interface BoxInterface {
 	name?:QName,
 	attributes:Array<Attribute>,
 	text?:string,
+	isReplacedElement:boolean,
 	children:Array<Box>,
 	cssprops?:Properties,
 	parent_path?:string,
@@ -119,7 +120,7 @@ export default class Box extends React.Component<BoxInterface, BoxState> {
 					hasBlockChildren = (c.props.type === BoxType.BLOCK);
 				else if (hasBlockChildren !== (c.props.type === BoxType.BLOCK))
 					throw new IllegalArgumentException("block and inline can not be siblings");
-				if (c.props.name == null && prevIsAnonymous === true)
+				if (c.props.type === BoxType.BLOCK && c.props.name == null && prevIsAnonymous === true)
 					throw new IllegalArgumentException("no adjacent anonymous block boxes");
 				prevIsAnonymous = (c.props.name == null);
 			}

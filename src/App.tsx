@@ -219,6 +219,7 @@ export default class App extends React.Component {
             attributes:this.state.root_box.props.attributes,
             type:this.state.root_box.props.type,
             name:this.state.root_box.props.name,
+            isReplacedElement:this.state.root_box.props.isReplacedElement,
             children:this.state.root_box.props.children
         });
         let resultBox = rootBox;
@@ -242,6 +243,7 @@ export default class App extends React.Component {
                         <Box attributes={resultBox.props.attributes}
                             type={resultBox.props.type}
                             name={resultBox.props.name}
+                            isReplacedElement={this.state.root_box.props.isReplacedElement}
                             children={resultBox.props.children}
                             render_html={!this.state.raw_mode}/>
                     </div>
