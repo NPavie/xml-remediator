@@ -16,9 +16,13 @@ function assertThat(test:boolean) {
 }
 
 
-/** Box selection filter */
+/** Box selection filters */
 function isBlockAndHasNoBlockChildren(b?:Box){
 	return b ? b.isBlockAndHasNoBlockChildren : true;
+}
+
+function isReplacedElementOrTextBox(b?: Box) {
+    return b ? b.props.text != null || b.props.isReplacedElement : true;
 }
 
 class Optional<T>{
@@ -58,6 +62,8 @@ export default class BoxTreeWalker {
     }
     
 	subTree():BoxTreeWalker {
+		if (this.path.length == 0)
+            return this;
 		let fullTree = this;
 		let subTree = new BoxTreeWalker(fullTree.current, (root:Box) => {
             if (this.rootBox != fullTree.current)
@@ -347,6 +353,12 @@ export default class BoxTreeWalker {
 			assertThat(!this.firstFollowing(isBlockAndHasNoBlockChildren).done);
 	}
 
+	nthReplacedElementOrTextBox(index: number) {
+		assertThat(!this.firstDescendant(isReplacedElementOrTextBox).done);
+		for (let i = 0; i < index; i++)
+			assertThat(!this.firstFollowing(isReplacedElementOrTextBox).done);
+	}
+
 	count(filter:(b?:Box)=>boolean) {
 		let count = 0;
 		while (!this.firstDescendant(filter).done || !this.firstFollowing(filter).done)
@@ -354,7 +366,8 @@ export default class BoxTreeWalker {
 		return count;
 	}
 
-	transformSingleRowTable(firstBlockIdx:number, blockCount:number) {
+	transformSingleRowTable(firstBlockIdx:number, blockCount:number) : BoxTreeWalker {
+		this.root();
 		this.nthBlock(firstBlockIdx);
 		while (true) {
 			assertThat(this.previousSibling().done);
@@ -378,28 +391,91 @@ export default class BoxTreeWalker {
 		//assertThat(this.current.props.cssprops && this.current.props.cssprops.display == "table-row");
 		this.renameCurrent(DIV);
 		assertThat(this.nextSibling().done);
-		let colgroupPresent = false;
-		if (!this.previousSibling().done) {
-			//assertThat(this.current.props.cssprops && this.current.props.cssprops.display == "table-column-group");
-			assertThat(this.previousSibling().done);
-			colgroupPresent = true;
-		}
+		assertThat(this.previousSibling().done);
 		assertThat(!this.parent().done);
-		if (!colgroupPresent ) { // && this.current.props.cssprops && this.current.props.cssprops.display == "table-row-group"
+		if (true) { // this.current.props.cssprops && this.current.props.cssprops.display == "table-row-group"
 			assertThat(this.nextSibling().done);
-			if (!this.previousSibling().done) {
-				//assertThat(this.current.props.cssprops && this.current.props.cssprops.display == "table-column-group");
-				assertThat(this.previousSibling().done);
-				colgroupPresent = true;
-			}
+			assertThat(this.previousSibling().done);
 			assertThat(!this.parent().done);
 		}
 		//assertThat(this.current.props.cssprops && this.current.props.cssprops.display == "table");
-		if (colgroupPresent)
-			this.deleteFirstChild();
 		this.firstChild();
 		this.unwrapParent();
 		let table = this.subTree();
 		assertThat(count(table, isBlockAndHasNoBlockChildren) == blockCount);
+		return this;
 	}
+
+	markupHeading(firstBlockIdx: number, blockCount: number) : BoxTreeWalker {
+		let doc: BoxTreeWalker = this;
+		this.root();
+		this.nthBlock(firstBlockIdx);
+		// find ancestor that contains the specified number of blocks
+		while (true) {
+			let tmp: BoxTreeWalker = doc.clone();
+			if (tmp.previousSibling().done
+				&& !tmp.parent().done
+				&& count(tmp, isBlockAndHasNoBlockChildren) <= blockCount) {
+				doc = tmp;
+			} else {
+				assertThat(count(doc, isBlockAndHasNoBlockChildren) == blockCount);
+				break;
+			}
+		}
+		doc.renameCurrent(this.H1);
+		// remove all strong within the heading
+		let h1Walker: BoxTreeWalker = doc.subTree();
+		let isStrong: (node?: Box) => boolean = b => b ? this.STRONG == b.props.name : true;
+		while (!h1Walker.firstDescendant(isStrong).done || !h1Walker.firstFollowing(isStrong).done)
+			if (!h1Walker.previousSibling().done)
+				h1Walker.unwrapNextSibling();
+			else if (!h1Walker.parent().done)
+				h1Walker.unwrapFirstChild();
+			else
+				throw new RuntimeException("coding error");
+		// remove all div within the heading
+		h1Walker.root();
+		let isDiv: (node?: Box) => boolean = b => b ? DIV == b.props.name : true;
+		while (!h1Walker.firstDescendant(isDiv).done || !h1Walker.firstFollowing(isDiv).done)
+			h1Walker.renameCurrent(this._SPAN);
+		return doc;
+	}
+
+	removeImage(blockIdx: number, inlineIdx: number) : BoxTreeWalker {
+		this.root();
+		this.nthBlock(blockIdx);
+		if (inlineIdx >= 0) {
+			assertThat(inlineIdx < count(this, isReplacedElementOrTextBox));
+			this.nthReplacedElementOrTextBox(inlineIdx);
+		}
+		assertThat(this.IMG == this.current.props.name);
+		assertThat(this.current.props.isReplacedElement);
+		this.renameCurrent(this._SPAN);
+		return this;
+	}
+
+
+	IMG: QName = new QName({
+		namespace: "http://www.w3.org/1999/xhtml",
+		localPart: "img",
+		prefix: ""
+	});
+
+	H1: QName = new QName({
+		namespace: "http://www.w3.org/1999/xhtml",
+		localPart: "h1",
+		prefix: ""
+	});
+
+	STRONG: QName = new QName({
+		namespace: "http://www.w3.org/1999/xhtml",
+		localPart: "strong",
+		prefix: ""
+	});
+
+	_SPAN: QName = new QName({
+		namespace: "http://www.w3.org/1999/xhtml",
+		localPart: "_span",
+		prefix: ""
+	});
 }

@@ -219,6 +219,7 @@ export default class App extends React.Component {
             attributes:this.state.root_box.props.attributes,
                                 type:this.state.root_box.props.type,
                                 name:this.state.root_box.props.name,
+                                isReplacedElement:this.state.root_box.props.isReplacedElement,
                                 children:this.state.root_box.props.children
         });
         let walker:BoxTreeWalker = new BoxTreeWalker(rootBox);
@@ -251,6 +252,7 @@ export default class App extends React.Component {
                         <Box attributes={this.state.root_box.props.attributes}
                                 type={this.state.root_box.props.type}
                                 name={this.state.root_box.props.name}
+                                isReplacedElement={this.state.root_box.props.isReplacedElement}
                                 children={this.state.root_box.props.children}/>
                     </table>
                 </main>
