@@ -36,9 +36,11 @@ export interface BoxInterface {
 	isReplacedElement:boolean,
 	children:Array<Box>,
 	cssprops?:Properties,
+	// props for state propagation
 	parent_path?:string,
 	parent_index?:number,
 	parent_hovered?:boolean,
+	parent_selected?:boolean,
 	render_html?:boolean
 }
 
@@ -50,7 +52,6 @@ export default class Box extends React.Component<BoxInterface, BoxState> {
 	public childrenIterable:ListIterable<Box>;
 	public path:string = "";
 	public key:string = "";
-	public is_hovered:boolean = false;
 
 
 	constructor(props:BoxInterface) {
@@ -59,7 +60,7 @@ export default class Box extends React.Component<BoxInterface, BoxState> {
 		this.path = (props.parent_path ? props.parent_path : "") + "/"+ (props.name? props.name.localPart : "text()");
 		this.key = this.path + (props.parent_index ? `[${props.parent_index}]` : "[0]");
 		this.state = {
-			is_selected:false,
+			is_selected:false || props.parent_selected,
 			is_focused:false,
 			is_hovered:false || props.parent_hovered
 		};	
@@ -120,7 +121,7 @@ export default class Box extends React.Component<BoxInterface, BoxState> {
 					hasBlockChildren = (c.props.type === BoxType.BLOCK);
 				else if (hasBlockChildren !== (c.props.type === BoxType.BLOCK))
 					throw new IllegalArgumentException("block and inline can not be siblings");
-				if (c.props.type === BoxType.BLOCK && c.props.name == null && prevIsAnonymous === true)
+				if (c.props.name == null && prevIsAnonymous === true)
 					throw new IllegalArgumentException("no adjacent anonymous block boxes");
 				prevIsAnonymous = (c.props.name == null);
 			}
@@ -250,6 +251,7 @@ export default class Box extends React.Component<BoxInterface, BoxState> {
 						text={b.props.text}
 						children={b.props.children}
 						cssprops={b.props.cssprops}
+						isReplacedElement={b.props.isReplacedElement}
 						parent_hovered={this.state.is_hovered || this.props.parent_hovered}
 						parent_path={this.key}
 						parent_index={i}
