@@ -38,16 +38,17 @@ export default class ListIterator<T> implements IterableIterator<T>{
         } else return false;
     }
 
-    hasPrevious(): boolean {
-        return this.index > 0;
-    }
-
     next() : IteratorResult<T, any>{
         if (!this.hasNext())
             return {done: true, value:undefined};
         else
             return {done: false, value: this.list[this.index++]};
     }
+
+    hasPrevious(): boolean {
+        return this.index > 0;
+    }
+
     previous() {
         if (!this.hasPrevious())
             return {done: true};
@@ -56,6 +57,7 @@ export default class ListIterator<T> implements IterableIterator<T>{
                 done: false,
                 value: this.list[--this.index]};
     }
+
     clone() {
         return new ListIterator<T>(this);
     }
@@ -81,5 +83,8 @@ export default class ListIterator<T> implements IterableIterator<T>{
         while (!(next = this.next()).done) array.push(next.value);
         return array;
     }
+
+    // implement push, pop, get ?
+    
 
 }

@@ -22,11 +22,11 @@ import 'brace/theme/github';
 import 'brace/theme/monokai';
 */
 
-import Remediation from './components/Remediation';
+import DOMRemediation from './components/DOMRemediation';
 //import RemediationView from './components/RemediationView';
 
 import test_document from "./temp/document.json";
-import Box from './components/Box';
+import { Box, BoxRenderMode } from './components/Box';
 import BoxTreeWalker from './components/BoxTreeWalker';
 import ContextualMenu from './components/ContextualMenu';
 
@@ -90,7 +90,7 @@ function getMimetypeAs<T>(filepath:string):T{
 export default class App extends React.Component {
 
     state = {
-        raw_mode: false,
+        renderer_mode:BoxRenderMode.TREE,
         input_viewer_css: ["App-input-viewer", "show"],
         drawer_button_css: ["App-button"],
         output_viewer_css: ["App-output-viewer", "with-drawer"],
@@ -99,31 +99,36 @@ export default class App extends React.Component {
         input_file: "",
         input_content: "",
         output_content: "",
-        applicable_remediations: new Array<Remediation>(),
-        applied_remediations_stack: new Array<Remediation>(),
+        applicable_remediations: new Array<DOMRemediation>(),
+        applied_remediations_stack: new Array<DOMRemediation>(),
         root_box:Box.parse(JSON.stringify(test_document))
     };
 
-    fileInput: any;
-    rawEditor: any;
-    epubViewer: any;
+    editorViewSelector:any;
 
     constructor(props: any) {
         super(props);
-        this.epubViewer = React.createRef();
-        this.fileInput = React.createRef();
-        this.rawEditor = React.createRef();
-
-        this.handleFileSubmit.bind(this);
+        this.editorViewSelector = React.createRef();
+        //this.handleFileSubmit.bind(this);
+        this.selectEditorMode = this.selectEditorMode.bind(this);
     }
 
+    /*
     changeEditorView() {
         var newstate = this.state;
         if (newstate.raw_mode === true) {
             newstate.raw_mode = false;
         } else newstate.raw_mode = true;
         this.setState(newstate);
-    };
+    }; */
+
+    
+    selectEditorMode(){
+        console.log(this.editorViewSelector.current.value as BoxRenderMode);
+        this.setState({
+            renderer_mode:this.editorViewSelector.current.value as BoxRenderMode
+        })
+    }
 
     loadingToastId: React.ReactText = "";
     /**
@@ -131,6 +136,7 @@ export default class App extends React.Component {
      * @param  {[type]} event:any [description]
      * @return {[type]}           [description]
      */
+    /*
     handleFileSubmit(event: any) {
         event.preventDefault();
         if (this.fileInput.current.files.length > 0) {
@@ -159,7 +165,7 @@ export default class App extends React.Component {
         } else {
             alert("No file selected");
         }
-    }
+    } // */
 
     /**
      * 
@@ -173,21 +179,18 @@ export default class App extends React.Component {
     /**
      * Apply a remediation
      */
-    onRemediationApplied(remediation_to_apply:Remediation){
+    onRemediationApplied(remediation_to_apply:DOMRemediation){
         // push remediation on application stack
         let stack = this.state.applied_remediations_stack;
         stack.push(remediation_to_apply);
         this.updateRemediationsStack(stack);
-
-        
-        
     }
 
     /**
      * general function call to update the result and the remediation stack
-     * @param {Array<Remediation>} new_remediations_stack new stack of the remediations to applied on input content to compute the output content
+     * @param {Array<DOMRemediation>} new_remediations_stack new stack of the remediations to applied on input content to compute the output content
      */
-    updateRemediationsStack(new_remediations_stack:Array<Remediation>){
+    updateRemediationsStack(new_remediations_stack:Array<DOMRemediation>){
         let currentContent = this.state.input_content;
         if(this.state.input_file){
            let mimetype = getMimetypeAs<SupportedType>(this.state.input_content);
@@ -195,11 +198,6 @@ export default class App extends React.Component {
                 currentContent = remediation.applyOn(currentContent);
             });
         }
-
-        console.log("Remediations applied : ");
-        console.log(new_remediations_stack);
-        console.log("result : ");
-        console.log(currentContent);
         
         // update stack and content output content
         this.setState({
@@ -210,20 +208,20 @@ export default class App extends React.Component {
 
 
     render() {
-        var switchingView: String =
-            this.state.raw_mode === true ?
-                "Switch to text viewer" :
-                "Switch to raw viewer";
+        // var switchingView: String =
+        //     this.state.raw_mode === true ?
+        //         "Switch to text viewer" :
+        //         "Switch to tree viewer";
 
         let rootBox = new Box({
             attributes:this.state.root_box.props.attributes,
             type:this.state.root_box.props.type,
             name:this.state.root_box.props.name,
             isReplacedElement:this.state.root_box.props.isReplacedElement,
-            children:this.state.root_box.props.children
+            children:this.state.root_box.props.children,
+            render_mode:this.state.renderer_mode
         });
         let resultBox = rootBox;
-
         
         
         return (
@@ -232,20 +230,21 @@ export default class App extends React.Component {
                 <header className="App-header">
                     
                     
-                    <button className="App-button"
-                        onClick={(event: any) => {
-                            this.changeEditorView();
-                        }} >{switchingView}</button>
-                    
+                    <label>Change the content aspect : </label>
+                    <select ref={this.editorViewSelector} onChange={()=>{this.selectEditorMode()}}>
+                        <option value={BoxRenderMode.TREE}>Document tree</option>
+                        <option value={BoxRenderMode.HTML}>Original content</option>
+                        <option value={BoxRenderMode.SEMANTIC}>Content with semantic</option>
+                    </select>
                 </header>
                 <main className="App-frame">
                     <div className="App-content">
                         <Box attributes={resultBox.props.attributes}
                             type={resultBox.props.type}
                             name={resultBox.props.name}
-                            isReplacedElement={this.state.root_box.props.isReplacedElement}
+                            isReplacedElement={resultBox.props.isReplacedElement}
                             children={resultBox.props.children}
-                            render_html={!this.state.raw_mode}/>
+                            render_mode={resultBox.props.render_mode}/>
                     </div>
                     <ContextualMenu className="App-context_menu"/>
                 </main>
@@ -281,6 +280,12 @@ export default class App extends React.Component {
                             this.handleFileSubmit(event) 
                         }}
                         eventRef={this.fileInput} />
+
+<button className="App-button"
+                        onClick={(event: any) => {
+                            this.changeEditorView();
+                        }} >{switchingView}</button>
+                    
 
 xml viewer
  let remediations_viewer;

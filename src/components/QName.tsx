@@ -19,7 +19,7 @@ export interface QNameInterface{
  * @property {public string|undefined} prefix - prefix associated to the namespace
  * @property {public string} localPart -  local name of the node
  */
-export default class QName {
+export default class QName{
     public namespace?: string;
     public prefix?: string;
     public localPart: string;
@@ -30,11 +30,12 @@ export default class QName {
 	    this.prefix = from.prefix;
     }
 
-    public static DIV:QName = new QName({
-        namespace: "http://www.w3.org/1999/xhtml",
-        localPart: "div",
-        prefix: ""
-    });
+    equals(name:QName){
+        return (
+            name.namespace == this.namespace 
+                && name.localPart == this.localPart 
+                && name.prefix == this.prefix);
+    }
 
 }
 

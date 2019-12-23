@@ -1,5 +1,5 @@
 import React from 'react';
-import Remediation from './Remediation'
+import DOMRemediation from './DOMRemediation'
 
 /* TODO and NOTES
 it seems more appropriate to consider the whole remediation list as a kind of stack
@@ -8,14 +8,14 @@ On remediation click (or on a button),
     - Set content view focus on the corresponding file and elemment
 */
 
-interface RemediationViewProps {
-    remediation:Remediation,
+interface DOMRemediationViewProps {
+    remediation:DOMRemediation,
     onApply:Function,
     isApplied:boolean
 }
 
 
-export default class RemediationView extends React.Component<RemediationViewProps,{}> {
+export default class DOMRemediationView extends React.Component<DOMRemediationViewProps,{}> {
 
     static defaultProps = {
         onApply:()=>{},

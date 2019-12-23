@@ -1,0 +1,77 @@
+export default `div, p, h1, strong, em, table {
+  position: relative;
+}
+div::before, p::before, h1::before, strong::before, em::before, table::before {
+  position: absolute;
+  font-size: 70%;
+  right: 0;
+  top: 0;
+  padding: 1px;
+  color: white;
+  font-weight: normal;
+  font-style: normal;
+  font-family: sans-serif;
+}
+div, p, h1 {
+  margin: 0;
+  padding: 15px;
+}
+div ~ *, p ~ *, h1 ~ * {
+  margin-top: 15px;
+}
+strong, em {
+  padding: 1px;
+}
+div {
+  border: 1px solid #ff9900;
+  background: #ffeedd;
+}
+div::before {
+  content: "div";
+  background: #ff9900;
+}
+p {
+  border: 1px solid #77cc99;
+  background: #d8f2e7;
+}
+p::before {
+  content: "p";
+  background: #77cc99;
+}
+h1 {
+  border: 1px solid #ff5500;
+  background: #ffbbaa;
+}
+h1::before {
+  content: "h1";
+  background: #ff5500;
+}
+strong {
+  border: 1px solid #aa55ee;
+  background: #e7ddfa;
+  padding-right: 35px;
+  /* font-weight: normal; */
+}
+strong::before {
+  content: "strong";
+  background: #aa55ee;
+}
+table {
+  border: 1px solid #dfee55;
+  background: #f0fadd;
+  padding-right: 35px;
+  /* font-weight: normal; */
+}
+table::before {
+  content: "table";
+  background: #dfee55;
+}
+em {
+  border: 1px solid #ee88cc;
+  background: #f6ccdd;
+  padding-right: 20px;
+}
+em::before {
+  content: "em";
+  background: #ee88cc;
+}`

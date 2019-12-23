@@ -8,7 +8,7 @@ import * as xmlserializer from 'xmlserializer';
  * @member {string} remapping : root node replacement
  * 
  */
-export default class Remediation {
+export default class DOMRemediation {
     public pattern: string;
 
     // Proposition : actions as function calls in a string 
