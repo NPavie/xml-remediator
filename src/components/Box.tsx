@@ -6,17 +6,18 @@ import IllegalArgumentException from "./exceptions/IllegalArgumentException";
 import QName from './QName';
 import Attribute from './Attribute';
 import { Properties } from "csstype";
-import React, { Fragment } from "react";
+import React, { Fragment, ReactElement } from "react";
 
 
-import './Box.css';
 import Base64 from "./Base64";
+
+import "../css/html5-semantic-classes.css";
 
 import html5_semantic_css from '../css/html5-semantic.inlined';
 import html4 from '../css/html4.inlined';
 
 
-enum BoxType {
+export enum BoxType {
 	INLINE,
 	BLOCK
 }
@@ -78,8 +79,8 @@ export interface BoxInterface {
 	cssprops?:Properties,
 	parent_key?:string,
 	parent_index?:number,
-	parent_hovered?:boolean,
-	parent_selected?:boolean,
+	hovered_key?:string,
+	selected_key?:string,
 	virtual?:boolean,
 	render_mode?:BoxRenderMode
 }
@@ -106,11 +107,14 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		let path = (props.parent_key ? props.parent_key : "") + "/"+ (props.name? props.name.localPart : "text()");
 		this.key = path + (props.parent_index ? `[${props.parent_index}]` : "[0]");
 		this.state = {
-			is_selected:false || props.parent_selected,
+			is_selected:(props.selected_key ? this.key.startsWith(props.selected_key) : false),
 			is_focused:false,
-			is_hovered:false || props.parent_hovered
-		};	
+			is_hovered:(props.hovered_key ? this.key.startsWith(props.hovered_key) : false) 
+		};
 	}
+
+
+	//// BOX STRUCTURE
 
 	get children(){
 		return this.childrenList[Symbol.iterator]() as ListIterator<Box>;
@@ -127,8 +131,8 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 			cssprops:this.props.cssprops,
 			parent_key:this.props.parent_key,
 			parent_index:this.props.parent_index,
-			parent_hovered:this.props.parent_hovered,
-			parent_selected:this.props.parent_selected,
+			hovered_key:this.props.hovered_key,
+			selected_key:this.props.selected_key,
 			virtual:this.props.virtual,
 			render_mode:this.props.render_mode
 		} as BoxInterface;
@@ -167,13 +171,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		return newBox;
 	}
 
-	changeHovering(){
-		let current_state = this.state;
-		this.setState({
-			is_hovered:!current_state.is_hovered
-		});	
-	}
-
+	
 //	get children():ListIterator<Box>{
 //		return this.childrenIterable[Symbol.iterator]() as ListIterator<Box>;
 //	}
@@ -269,11 +267,18 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 	 * - Add box hovering
 	 * - 
 	 * Reconstruct the box hierarchy as xml within a string.
-	 * @param rendering_start_path path from which the rendering should start.
-	 * (i.e. for html : "/html[0]/body[0]/", with a trailing slash at the end to only render the content of the body and not the body itsel).
+	 * @param args.rendering_start_path path from which the rendering should start.
+	 * (i.e. for html and starting from root : "/html[0]/body[0]/", with a trailing slash at the end to only render the content of the body and not the body itsel).
+	 * @param args.hovering_path path from which the rendering should start.
 	 */
-	computeHtml(rendering_start_path:string):string{
-		if (this.key.startsWith(rendering_start_path)){ // Node to render
+	computeHtml(args : {
+			rendering_start_path:string,
+			use_semantic_css?:boolean, 
+			hovering_path?:string, 
+			selection_path?:string
+		}):string 
+	{
+		if (this.key.startsWith(args.rendering_start_path)){ // Node to render
 			// render block and its children
 			if(this.props.name){
 				let node_name = this.props.name.prefix ? 
@@ -281,18 +286,17 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 						`${this.props.name.localPart}`;
 				
 				let namespaces_map:Map<string,string> = new Map<string,string>();
-
 				// List of attribute and values separated by a space + map of attributes namespaces for those who have a prefix
 				let attributes_array = this.props.attributes.map((attr:Attribute) => {
 					if(attr.name.prefix && attr.name.namespace && !namespaces_map.has(attr.name.prefix) ){
 						namespaces_map.set(attr.name.prefix,attr.name.namespace);
 					}
 					let attr_name = attr.name.prefix ? `${attr.name.prefix}:${attr.name.localPart}` : `${attr.name.localPart}`;
-					return `${attr_name}="${attr.value}"`
+					// everything except classes
+					return attr_name !== "class" ? `${attr_name}="${attr.value}"` : "";
 				});
 				
-				attributes_array.push(`id="${this.key}"`)
-				let attributes = attributes_array.join(' ');
+				attributes_array.push(`id="${this.key}"`);
 				
 				// Adding the node namespace to the map of namespaces
 				if(this.props.name && this.props.name.prefix && this.props.name.namespace && !namespaces_map.has(this.props.name.prefix)){
@@ -315,31 +319,51 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 					});
 					cssInlined += '"';
 				}
-				
+				let cssClass = "";
+				if( (args.hovering_path ? this.key.startsWith(args.hovering_path) : false) ){
+					cssClass += "hovered ";
+				}
+				if(args.use_semantic_css && this.props.name){
+					cssClass += `semantic_${this.props.name.localPart} `;
+				}
+				if(cssClass.length > 0){
+					cssClass = `class="${cssClass}"`;
+				}
+				attributes_array.push(cssClass);
 				// Content of the node and node end
 				let content = "";
 				let node_end = "";
 				if(this.props.children.length > 0){
-					content = ">";
+					content = ">\n";
 					for(let i = 0, end = this.props.children.length; i < end; i++){
-						content += this.props.children[i].computeHtml(rendering_start_path);
+						content += this.props.children[i].computeHtml({
+								rendering_start_path:args.rendering_start_path,
+								hovering_path:args.hovering_path,
+								selection_path:args.selection_path,
+								use_semantic_css:args.use_semantic_css}
+							);
 					}
 					node_end = `</${node_name}>`;
 				} else if(this.props.text){
-					content = ">" + this.props.text;
+					content = ">\n" + this.props.text;
 					node_end = `</${node_name}>`;
 				} else {
 					content = "";
 					node_end = "/>";
 				}
 				// Reconstruct node 
-				
+				let attributes = attributes_array.join(' ');
+
 				// use ${cssInlined} for computed css from the original document
-				return `<${node_name} ${attributes.trim()} ${namespaces.trim()}${content}${node_end}`;
+				return `<${node_name} ${attributes.trim()} ${namespaces.trim()}${content}\n${node_end}\n`;
 			} else { // anonymous node (more likely to be textual node)
 				if(this.props.children.length > 0) {
 					return this.props.children.map((b:Box)=>{
-							return b.computeHtml(rendering_start_path);
+							return b.computeHtml({
+								rendering_start_path:args.rendering_start_path,
+								hovering_path:args.hovering_path,
+								selection_path:args.selection_path,
+								use_semantic_css:args.use_semantic_css});
 						}).join("");
 				} else if(this.props.text) {
 					return this.props.text;
@@ -347,162 +371,277 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 			} 
 		} else if(this.props.children.length > 0){
 				return this.props.children.map((b:Box)=>{
-					return b.computeHtml(rendering_start_path);
+					return b.computeHtml({
+						rendering_start_path:args.rendering_start_path,
+						hovering_path:args.hovering_path,
+						selection_path:args.selection_path,
+						use_semantic_css:args.use_semantic_css});
 				}).join("");
 		} else return "";
 	}
 
-	
-	
 	/**
-	 * React rendering function
-	 * TODO : only change the tree based on 
+	 * Compute the React element that can be used in react rendering stage
+	 * @param rendering_start_path
+	 * @param use_semantic_css
+	 * @param hovering_path
+	 * @param selection_path
 	 */
-	render(){
-		
-		if(this.props.render_mode == BoxRenderMode.HTML 
-				|| this.props.render_mode == BoxRenderMode.SEMANTIC ){
-			
-			/* 
-			let rendered_content = {__html:this.computeHtml('/html[0]/body[0]/')};
-			return <div className="boxlist boxlist--html"  dangerouslySetInnerHTML={rendered_content} />;
-			// */
-			// iframe rendering
-			// Create a copy of the children tree
-			let rendered_children = this.props.children.slice(0);
+	computeReactNode(args : {
+		rendering_start_path:string,
+		use_semantic_css?:boolean, 
+		hovering_path?:string, 
+		selection_path?:string,
+		onMouseEnterCallback?:(hovered_key:string)=>void,
+		onMouseLeaveCallback?:(hovered_key:string)=>void,
+		onSelectionCallback?:(selected_key:string)=>void
+	}):React.FunctionComponentElement<{}> | React.DOMElement<any,Element> | ReactElement<{}>{
+		if (this.key.startsWith(args.rendering_start_path)){ // Node to render
+			// render block and its children
+			if(this.props.name){
+				let node_name = this.props.name.prefix ? 
+						`${this.props.name.prefix}:${this.props.name.localPart}` : 
+						`${this.props.name.localPart}`;
+				
+				let namespaces_map:Map<string,string> = new Map<string,string>();
+				// List of attribute and values separated by a space + map of attributes namespaces for those who have a prefix
+				let attributes_array = this.props.attributes.map((attr:Attribute) => {
+					if(attr.name.prefix && attr.name.namespace && !namespaces_map.has(attr.name.prefix) ){
+						namespaces_map.set(attr.name.prefix,attr.name.namespace);
+					}
+					let attr_name = attr.name.prefix ? `${attr.name.prefix}:${attr.name.localPart}` : `${attr.name.localPart}`;
+					// everything except classes
+					return attr_name !== "class" ? `"${attr_name}":"${attr.value}"` : "";
+				});
+				
+				attributes_array.push(`"id":"${this.key}"`);
+				
+				// Adding the node namespace to the map of namespaces
+				if(this.props.name && this.props.name.prefix && this.props.name.namespace && !namespaces_map.has(this.props.name.prefix)){
+					namespaces_map.set(this.props.name.prefix,this.props.name.namespace);
+				}
+				// compute namespaces string
+				let namespaces = new Array<string>();
+				namespaces_map.forEach((namespace:string, prefix:string, map:Map<String,String>) => {
+					namespaces.push(`"xmlns:${prefix}":"${namespace}"`);
+				});
 
-			// new css style tag
-			let css = new Box({
-				text:this.props.render_mode == BoxRenderMode.HTML ? html4 : html5_semantic_css,
-				attributes:[],
-				name:new QName({
-					prefix:"",
-					namespace:"http://www.w3.org/1999/xhtml",
-					localPart:"style"
-				}),
-				children:[],
-				type:BoxType.INLINE,
-				isReplacedElement:false,
-				virtual:true
-			});
-			
-			// Create a virtual head to be rendered 
-			let head_children = new Array<Box>();
-			let existing_head = this.selectBox('/html[0]/head[0]');
-			if(existing_head) { // copy existing head children if the
-				head_children = existing_head.props.children.slice(0);
-			}
-			head_children.push(css);
-
-			let head = new Box({
-				attributes:existing_head?existing_head.props.attributes.slice(0):[],
-				name:new QName({
-					prefix:"",
-					namespace:"http://www.w3.org/1999/xhtml",
-					localPart:"head"
-				}),
-				children:head_children,
-				type:BoxType.BLOCK,
-				isReplacedElement:false,
-				virtual:true,
-			});
-			head.updateKeys('/html[0]',0);
-			rendered_children.unshift(head);
-			
-			let rendered_box_props = {
-				type: this.props.type,
-				name: this.props.name,
-				attributes: this.props.attributes,
-				text: this.props.text,
-				isReplacedElement: this.props.isReplacedElement,
-				children: rendered_children,
-				cssprops: this.props.cssprops,
-				parent_key: this.props.parent_key,
-				parent_index: this.props.parent_index,
-				parent_hovered: this.props.parent_hovered,
-				parent_selected: this.props.parent_selected,
-				hide: this.props.virtual,
-				render_mode: this.props.render_mode
-			};
-			rendered_box_props.children = rendered_children;
-			let rendered_box = new Box(rendered_box_props);
-			rendered_box.key = '/html[0]';
-
-			let rendered_content = rendered_box.computeHtml('/'); // recursively compute the html source as a string
-			console.log(rendered_content);
-			return (<iframe 
-				title="html_view"
-				//srcDoc={rendered_content} // not compatible with edge and legacy browser
-				src={ "data:text/html;charset=utf-8, " + encodeURIComponent(rendered_content)} // + Base64.encodeString(rendered_content)} 
-				height="100%" width="70%"
-				contentEditable={true} />);
-			// */	
-		} else {
-			
-			// rendering the tree on the left, and the content on the right
-			let pathes = this.key.split('/').slice(1);
-			let block_level = pathes.length - 1;
-			let level_indicator = "";
-			for(let i = block_level; i--;){
-				level_indicator += "---"
-			}
-			level_indicator += "| - ";
-			let modifier = (this.state.is_hovered || this.props.parent_hovered) ? "--mouseover" : "";
-			let rendered_children = new Array<JSX.Element>();
-			for(let i = this.props.children.length; i--;){
-				let b:Box = this.props.children[i];
-				if(!b.props.virtual){
-					rendered_children.unshift(<Box 
-						type={b.props.type}
-						name={b.props.name}
-						attributes={b.props.attributes}
-						text={b.props.text}
-						children={b.props.children}
-						cssprops={b.props.cssprops}
-						isReplacedElement={b.props.isReplacedElement}
-						parent_hovered={this.state.is_hovered || this.props.parent_hovered}
-						parent_key={this.key}
-						parent_index={i}
-						virtual={b.props.virtual}
-						render_mode={this.props.render_mode}
-					/>);
+				let cssInlined = "";
+				if(this.props.cssprops){
+					cssInlined = 'style="';
+					Object.entries(this.props.cssprops).forEach((temp)=>{
+						let value = temp[1];
+						if(value){
+							cssInlined += `${temp[0]}:${value};`;
+						}
+					});
+					cssInlined += '"';
+				}
+				let cssClasses = new Array<string>();
+				if( (args.hovering_path ? this.key.startsWith(args.hovering_path) : false) || this.state.is_hovered ){
+					cssClasses.push("hovered");
+				}
+				if(args.use_semantic_css && this.props.name){
+					cssClasses.push(`semantic_${this.props.name.localPart}`);
+				}
+				if(cssClasses.length > 0){
+					attributes_array.push(`"className":"${cssClasses.join(" ")}"`);
 				}
 				
-			}
+				//TODO  onmouseenter should always sent back the lowest child
+				
 
-			if(block_level === 0) return (
-				<div className="boxlist boxlist--raw">
-					<table className="boxlist__table">
-						<tbody>
-							<tr>
-								<th className="boxlist__data">Block</th>
-								<th className="boxlist__content">Content</th>
-							</tr>
-							<tr >
-								<td className={"box__data"+modifier}
-									onMouseOver={(e:any)=>{this.changeHovering()}}
-									onMouseOut={(e:any)=>{this.changeHovering()}} >
-									{level_indicator + pathes.pop()}
-								</td>
-								<td className={"box__content"+modifier} >{this.props.text}</td>
-							</tr>
-							{rendered_children}
-						</tbody>
-					</table>
-				</div>
-			); else return (
-				<Fragment key={this.key}>
-					<tr >
-						<td className={"box__data"+modifier}
-							onMouseOver={(e:any)=>{this.changeHovering()}}
-							onMouseOut={(e:any)=>{this.changeHovering()}} >
-							{level_indicator + pathes.pop()}
-						</td>
-						<td className={"box__content"+modifier} >{this.props.text}</td>
-					</tr>	
-					{rendered_children}
-				</Fragment>);
+				// Content of the node
+				let content = [];
+				if(this.props.children.length > 0){
+					for(let i = 0, end = this.props.children.length; i < end; i++){
+						content.push(this.props.children[i].computeReactNode(args));
+					}
+				} else if(this.props.text){
+					content.push(React.createElement(React.Fragment,null,this.props.text))
+				}
+				
+				let attributes = JSON.parse(`{${attributes_array.filter((el=>{return el != "";})).join(',')}}`);
+				
+				// Adding event callbacks
+				if(args.onMouseEnterCallback){
+					attributes.onMouseEnter = (()=>{args.onMouseEnterCallback!(this.key)});
+				}
+				if(args.onMouseEnterCallback){
+					attributes.onMouseLeave = (()=>{args.onMouseLeaveCallback!(this.key)});
+				}
+				if(args.onSelectionCallback){
+					attributes.onClick = (() => {args.onSelectionCallback!(this.key)});
+				}
+				
+				// Note : empty array passed to createElement create an empty but not self closing tag
+				// -> react raises an error for cases like tag <img></img> is created instead of <img/>
+				if(content.length > 0) return React.createElement(node_name,attributes,content);
+				else return React.createElement(node_name,attributes);
+			} else { // anonymous node (more likely to be textual node)
+				if(this.props.children.length > 0) {
+					return React.createElement(React.Fragment,null, 
+						this.props.children.map((b:Box)=>{
+							return b.computeReactNode(args);
+						}));
+				} else if(this.props.text) {
+					return React.createElement(React.Fragment,null,this.props.text);
+				} else return React.createElement(React.Fragment); // Empty anonymous node
+			} 
+		} else if(this.props.children.length > 0){ // anonymous node with children
+			return React.createElement(React.Fragment,null, 
+				this.props.children.map((b:Box)=>{
+					return b.computeReactNode(args);
+				}));
+		} else return React.createElement(React.Fragment); // Empty anonymous node
+	}
+
+	/**
+	 * Reconstruct a basic html frame around the box
+	 * @param rendering_start_path path from which the html frame start 
+	 * 		(element that are not to be rendered when computing the frame)
+	 */
+	computeIsolatedHtml(
+		rendering_start_path:string, 
+		use_semantic_css?:boolean
+	):string{
+		if (this.key.startsWith(rendering_start_path)){
+			let html_content = "";
+			let tags = this.key.substring(rendering_start_path.length).split('/').slice(1);
+			tags = tags.slice(0,tags.length - 1);
+			for(let tag of tags){
+				tag = tag.split('[')[0];
+				let cssClass = use_semantic_css ? ` class="semantic_${tag}"` : "";
+				html_content += `<${tag}${cssClass}>`;
+			}
+			html_content += this.computeHtml({
+					rendering_start_path:rendering_start_path, 
+					use_semantic_css:use_semantic_css});
+			for(let i = tags.length; i--;){
+				let tag = tags[i].split('[')[0];
+				html_content += `</${tag}>`;
+			}
+			//console.log(html_content);
+			return html_content;
+		} else return "";
+	}
+	
+	/**
+	 * Reconstruct a basic react node tree around the box react node
+	 * @param rendering_start_path path from which the react rendering start 
+	 * 		(element that are not to be rendered when computing the box)
+	 */
+	computeIsolatedReactNode(args : {
+		rendering_start_path:string,
+		use_semantic_css?:boolean, 
+		hovering_path?:string, 
+		selection_path?:string,
+		onMouseEnterCallback?:(hovered_key:string)=>void,
+		onMouseLeaveCallback?:(hovered_key:string)=>void,
+		onSelectionCallback?:(selected_key:string)=>void
+	}
+	):React.FunctionComponentElement<{}> | React.DOMElement<any,Element> | ReactElement<{}>{
+		if (this.key.startsWith(args.rendering_start_path)){
+			let tags = this.key.substring(args.rendering_start_path.length).split('/').slice(1);
+			tags = tags.slice(0,tags.length - 1);
+			let stack = [];
+			for(let tag of tags){
+				tag = tag.split('[')[0];
+				stack.push(tag);
+			}
+			let rendered_node = this.computeReactNode(args);
+			while(stack.length > 0 ){
+				let tag = stack.pop()!;
+				let cssClass = args.use_semantic_css ? `semantic_${tag}` : "";
+				
+				rendered_node = React.createElement(tag,{
+					className:cssClass
+				}, rendered_node);
+			}
+			return rendered_node;
+		} else return React.createElement(React.Fragment); // Empty anonymous node
+	}
+	
+	/**
+	 * React default rendering function
+	 */
+	render(){
+		return this.renderAsIframe();
+	}
+
+	renderAsIframe(){
+		
+		// iframe rendering
+		// Create a copy of the children tree
+		let rendered_children = this.props.children.slice(0);
+
+		// new css style tag
+		let css = new Box({
+			text:this.props.render_mode == BoxRenderMode.HTML ? html4 : html5_semantic_css,
+			attributes:[],
+			name:new QName({
+				prefix:"",
+				namespace:"http://www.w3.org/1999/xhtml",
+				localPart:"style"
+			}),
+			children:[],
+			type:BoxType.INLINE,
+			isReplacedElement:false,
+			virtual:true
+		});
+		
+		// Create a virtual head to be rendered 
+		let head_children = new Array<Box>();
+		let existing_head = this.selectBox('/html[0]/head[0]');
+		if(existing_head) { // copy existing head children if the
+			head_children = existing_head.props.children.slice(0);
 		}
+		head_children.push(css);
+
+		let head = new Box({
+			attributes:existing_head?existing_head.props.attributes.slice(0):[],
+			name:new QName({
+				prefix:"",
+				namespace:"http://www.w3.org/1999/xhtml",
+				localPart:"head"
+			}),
+			children:head_children,
+			type:BoxType.BLOCK,
+			isReplacedElement:false,
+			virtual:true,
+		});
+		head.updateKeys('/html[0]',0);
+		rendered_children.unshift(head);
+		
+		let rendered_box_props = {
+			type: this.props.type,
+			name: this.props.name,
+			attributes: this.props.attributes,
+			text: this.props.text,
+			isReplacedElement: this.props.isReplacedElement,
+			children: rendered_children,
+			cssprops: this.props.cssprops,
+			parent_key: this.props.parent_key,
+			parent_index: this.props.parent_index,
+			hovered_key: this.props.hovered_key,
+			selected_key: this.props.selected_key,
+			hide: this.props.virtual,
+			render_mode: this.props.render_mode
+		};
+		rendered_box_props.children = rendered_children;
+		let rendered_box = new Box(rendered_box_props);
+		rendered_box.key = '/html[0]';
+
+		// recursively compute the html source as a string
+		let rendered_content = rendered_box.computeHtml({rendering_start_path:'/',hovering_path:this.props.hovered_key}); 
+		//console.log(rendered_content);
+		return (<iframe 
+			title="html_view"
+			//srcDoc={rendered_content} // not compatible with edge and legacy browser
+			src={ "data:text/html;charset=utf-8, " + encodeURIComponent(rendered_content)} // + Base64.encodeString(rendered_content)} 
+			height="100%" width="100%"
+			contentEditable={true} />);
+			// */	
 	}
 
 	/**

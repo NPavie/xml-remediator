@@ -1,7 +1,7 @@
-export default `div, p, h1, strong, em, table {
+export default `div, p, h1, strong, em, table, small {
   position: relative;
 }
-div::before, p::before, h1::before, strong::before, em::before, table::before {
+div::before, p::before, h1::before, strong::before, em::before, table::before, small::before {
   position: absolute;
   font-size: 70%;
   right: 0;
@@ -56,6 +56,16 @@ strong::before {
   content: "strong";
   background: #aa55ee;
 }
+small {
+  border: 1px solid #ee5583;
+  background: #e7ddfa;
+  padding-right: 35px;
+  /* font-weight: normal; */
+}
+small::before {
+  content: "small";
+  background: #e68fa9;
+}
 table {
   border: 1px solid #dfee55;
   background: #f0fadd;
@@ -74,4 +84,7 @@ em {
 em::before {
   content: "em";
   background: #ee88cc;
+}
+.hovered {
+  background-color : skyblue;
 }`

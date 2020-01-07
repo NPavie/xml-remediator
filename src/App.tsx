@@ -26,10 +26,11 @@ import DOMRemediation from './components/DOMRemediation';
 //import RemediationView from './components/RemediationView';
 
 import test_document from "./temp/document.json";
-import { Box, BoxRenderMode } from './components/Box';
+import { Box, BoxRenderMode, BoxType } from './components/Box';
 import BoxTreeWalker from './components/BoxTreeWalker';
 import ContextualMenu from './components/ContextualMenu';
-
+import BoxTreeView from './components/BoxTreeView';
+import RemediatedContentView from "./components/RemediatedContentView";
 
 /**
  * Hash of available ace modes per extension
@@ -90,7 +91,7 @@ function getMimetypeAs<T>(filepath:string):T{
 export default class App extends React.Component {
 
     state = {
-        renderer_mode:BoxRenderMode.TREE,
+        renderer_mode:BoxRenderMode.SEMANTIC,
         input_viewer_css: ["App-input-viewer", "show"],
         drawer_button_css: ["App-button"],
         output_viewer_css: ["App-output-viewer", "with-drawer"],
@@ -99,30 +100,25 @@ export default class App extends React.Component {
         input_file: "",
         input_content: "",
         output_content: "",
+        hovered_key:"",
         applicable_remediations: new Array<DOMRemediation>(),
         applied_remediations_stack: new Array<DOMRemediation>(),
         root_box:Box.parse(JSON.stringify(test_document))
     };
 
-    editorViewSelector:any;
+    
 
     constructor(props: any) {
         super(props);
         this.editorViewSelector = React.createRef();
-        //this.handleFileSubmit.bind(this);
         this.selectEditorMode = this.selectEditorMode.bind(this);
+        this.onNodeHovering = this.onNodeHovering.bind(this);
     }
-
-    /*
-    changeEditorView() {
-        var newstate = this.state;
-        if (newstate.raw_mode === true) {
-            newstate.raw_mode = false;
-        } else newstate.raw_mode = true;
-        this.setState(newstate);
-    }; */
-
     
+    editorViewSelector:any;
+    /**
+     * Change editor display selector
+     */
     selectEditorMode(){
         console.log(this.editorViewSelector.current.value as BoxRenderMode);
         this.setState({
@@ -131,54 +127,13 @@ export default class App extends React.Component {
     }
 
     loadingToastId: React.ReactText = "";
-    /**
-     * Actions done when a file is uploaded : 
-     * @param  {[type]} event:any [description]
-     * @return {[type]}           [description]
-     */
-    /*
-    handleFileSubmit(event: any) {
-        event.preventDefault();
-        if (this.fileInput.current.files.length > 0) {
-            for (var i = this.fileInput.current.files.length - 1; i >= 0; i--) {
-                let fileObject = this.fileInput.current.files[i];
-                let reader = new FileReader();
-                reader.readAsText(fileObject,"UTF-8");
-                reader.onload = (event:any)=>{
-                    let content = event.target.result;
-                    // Compute remediation
-                    // Example remediation found in a sample : replace p with class "CN" by <h1>
-                    let remediations = new Array<Remediation>();
-                    remediations.push(new Remediation("//*[contains(@class,'CN')]","rename(\"h1\")"));
-                    
-                    // original content
-                    this.setState({
-                        applicable_remediations:remediations,
-                        input_content:event.target.result,
-                        output_content:content
-                    });
-                };
-                this.setState({
-                    input_file:fileObject.name
-                });
-            }
-        } else {
-            alert("No file selected");
-        }
-    } // */
-
-    /**
-     * 
-     */
+    
     undoLastRemediation(){
         let stack = this.state.applied_remediations_stack;
         stack.pop();
         this.updateRemediationsStack(stack);
     }
 
-    /**
-     * Apply a remediation
-     */
     onRemediationApplied(remediation_to_apply:DOMRemediation){
         // push remediation on application stack
         let stack = this.state.applied_remediations_stack;
@@ -186,10 +141,7 @@ export default class App extends React.Component {
         this.updateRemediationsStack(stack);
     }
 
-    /**
-     * general function call to update the result and the remediation stack
-     * @param {Array<DOMRemediation>} new_remediations_stack new stack of the remediations to applied on input content to compute the output content
-     */
+    
     updateRemediationsStack(new_remediations_stack:Array<DOMRemediation>){
         let currentContent = this.state.input_content;
         if(this.state.input_file){
@@ -206,6 +158,15 @@ export default class App extends React.Component {
         });
     }
 
+    onNodeHovering(key:string,is_hovered:boolean){
+        if(is_hovered){
+            //console.log(key + " is hovered");   
+            this.setState({hovered_key:key});
+        } else {
+            this.setState({hovered_key:""});
+        }
+    }
+
 
     render() {
         // var switchingView: String =
@@ -214,6 +175,7 @@ export default class App extends React.Component {
         //         "Switch to tree viewer";
 
         let rootBox = new Box({
+            hovered_key:this.state.hovered_key,
             attributes:this.state.root_box.props.attributes,
             type:this.state.root_box.props.type,
             name:this.state.root_box.props.name,
@@ -221,138 +183,108 @@ export default class App extends React.Component {
             children:this.state.root_box.props.children,
             render_mode:this.state.renderer_mode
         });
-        let resultBox = rootBox;
-        
+
         
         return (
             <div className="App">
                 <ToastContainer />
                 <header className="App-header">
-                    
-                    
-                    <label>Change the content aspect : </label>
-                    <select ref={this.editorViewSelector} onChange={()=>{this.selectEditorMode()}}>
-                        <option value={BoxRenderMode.TREE}>Document tree</option>
+                    <label>Display : </label>
+                    <select ref={this.editorViewSelector} onChange={()=>{this.selectEditorMode()}} defaultValue={BoxRenderMode.SEMANTIC}>
                         <option value={BoxRenderMode.HTML}>Original content</option>
                         <option value={BoxRenderMode.SEMANTIC}>Content with semantic</option>
                     </select>
                 </header>
                 <main className="App-frame">
-                    <div className="App-content">
-                        <Box attributes={resultBox.props.attributes}
-                            type={resultBox.props.type}
-                            name={resultBox.props.name}
-                            isReplacedElement={resultBox.props.isReplacedElement}
-                            children={resultBox.props.children}
-                            render_mode={resultBox.props.render_mode}/>
-                    </div>
-                    <ContextualMenu className="App-context_menu"/>
+                    <RemediatedContentView 
+                        displayed_root={rootBox}
+                        transformations_stack={[]}
+                        />
                 </main>
-                <footer className="App-footer" />
+                
             </div>
         );
     }
 }
 
-
-/**
- * Application structure
- *  given an input document (for now xhtml)
- *  - display the original document on the right
- *  - display the remediation list on the center
- *    - for each remediation
- *      - if remediation is a structural proposal, use a checkbox like validation
- *      - if remediation is missing content warning, use a text-area validation 
- *  - display the remediation result on the right
- *    - result displayed is recomputed 
- * 
- * display can be done with 2 mode : 
- * - Raw mode based on Ace editor
- * - html preview mode computed by xslt transform
- */
-
-/** Code backup
- * loading document
- <FileInput className="App-button"
-                        mimetype={getMimetypeAs<string>("expect.xhtml")}
-                        label="Input document : "
-                        onFileSubmit={(event: any) => { 
-                            this.handleFileSubmit(event) 
-                        }}
-                        eventRef={this.fileInput} />
-
-<button className="App-button"
-                        onClick={(event: any) => {
-                            this.changeEditorView();
-                        }} >{switchingView}</button>
-                    
-
-xml viewer
- let remediations_viewer;
-        if (this.state.raw_mode === true) {
-            let filename = this.state.input_file === "" ? "expected.xhtml" : this.state.input_file;
-            
-            remediations_viewer =
-                <AceEditor
-                    width="auto"
-                    mode={getMode(filename)}
-                    defaultValue="Please upload an xhtml file to start"
-                    value={this.state.output_content}
-                    theme="monokai"
-                    name="output_viewer"
-                    editorProps={{ $blockScrolling: true }}
-                />;
-
-        } else {
-            
-            remediations_viewer = <ContentView
-                    content={this.state.output_content}
-                    mimetype="application/xhtml+xml"
-                    allowEdition={true}
-                />;
-        }
+/*
 
 
+        // let document_rows = new Array<Box>();
+        // let boxes_queue = new Array<Box>();
+        // boxes_queue.push(rootBox);
+        // while(boxes_queue.length > 0){
+        //     for(let current_box of boxes_queue){
+        //         console.log(current_box);
+        //         // Parse children 
+        //         for(let child of current_box.children){
+        //             // if the child has a "table-row" display or is a block with only inline boxes
+        //             if(child.props.cssprops ? 
+        //                     (child.props.cssprops.display === "table-row" || 
+        //                         (child.props.cssprops.display === "block" && 
+        //                             child.props.children.length > 0 && 
+        //                             child.props.children[0].props.type === BoxType.INLINE)) : 
+        //                     child.props.type === BoxType.INLINE){
+        //                 // the child is the root of a "row"
+        //                 document_rows.unshift(child);
+        //             } else {
+        //                 // add the child to the boxe queue
+        //                 boxes_queue.push(child);   
+        //             }
+        //         }
+        //         // Remove the current box from the array
+        //         boxes_queue.shift();
+        //     }
+        // }
+        
 
-// For each posible remediation
-        let remediationsViews = new Array<JSX.Element>();
-        this.state.applicable_remediations.forEach( remediation =>{
-            var isApplied = false;
-            // check if the current remediation is in
-            var len = this.state.applied_remediations_stack.length;
-            while(!isApplied && len--){
-                isApplied = this.state.applied_remediations_stack[len].pattern === remediation.pattern ?
-                    true :
-                    false;
-            }
-            remediationsViews.push(
-                <RemediationView 
-                    key={"remediation-"+remediationsViews.length}
-                    remediation={remediation}
-                    isApplied={isApplied}
-                    onApply={() => {
-                        this.onRemediationApplied(remediation);
-                    }} />
-            );
-        });
-        let canUndo:boolean = this.state.applied_remediations_stack.length > 0;
+        //let resultBox = rootBox;
 
+        /*<BoxTreeView box={rootBox} 
+                            with_content={false} 
+                            onHoveringCallback={(key,status)=>this.onNodeHovering(key,status)}/>
+        
 
+        // new UI proposal : 
+        // Header actions : 
+        // - Expand the content tree
+        // - See content with original or semantic css
+        // On the left, the document tree
+        // on the center, the higlighted content
+        // on the left the action menu
 
-<div className="App-remediation">
-                        <p className="App-subframe-title">Possible remediations</p>
-                        <button disabled={!canUndo}
-                        onClick={(event: any) => {
-                            this.undoLastRemediation();
-                        }} >Undo</button>
-                        {remediationsViews}
-                        
+<footer className="App-footer" />
+<div className="App-content">
+                        <div className="document-in">
+                            <Box type={rootBox.props.type}
+                                name={rootBox.props.name}
+                                attributes={rootBox.props.attributes}
+                                text={rootBox.props.text}
+                                isReplacedElement={rootBox.props.isReplacedElement}
+                                children={rootBox.props.children}
+                                cssprops={rootBox.props.cssprops}
+                                parent_key={rootBox.props.parent_key}
+                                hovered_key={rootBox.props.hovered_key}
+                                parent_index={rootBox.props.parent_index}
+                                selected_key={rootBox.props.selected_key}
+                                virtual={rootBox.props.virtual}
+                                render_mode={rootBox.props.render_mode}/>
+                        </div>
+                        <div className="document-out">
+                            <Box type={rootBox.props.type}
+                                name={rootBox.props.name}
+                                attributes={rootBox.props.attributes}
+                                text={rootBox.props.text}
+                                isReplacedElement={rootBox.props.isReplacedElement}
+                                children={rootBox.props.children}
+                                cssprops={rootBox.props.cssprops}
+                                parent_key={rootBox.props.parent_key}
+                                hovered_key={rootBox.props.hovered_key}
+                                parent_index={rootBox.props.parent_index}
+                                selected_key={rootBox.props.selected_key}
+                                virtual={rootBox.props.virtual}
+                                render_mode={rootBox.props.render_mode}/>
+                        </div>
                     </div>
-                    <div className={this.state.output_viewer_css.join(' ')}>
-                        <p className="App-subframe-title">Remediations preview</p>
-                        {remediations_viewer}
-                    </div>
-
-
-
- */
+                    <ContextualMenu className="App-context_menu"/>
+*/

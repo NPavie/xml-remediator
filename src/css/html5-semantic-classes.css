@@ -1,19 +1,26 @@
-div, 
-p, 
-h1, 
-strong, 
-em, 
-table, 
-small {
+.semantic_div, 
+.semantic_p, 
+.semantic_h1, 
+.semantic_strong, 
+.semantic_em, 
+.semantic_table, 
+.semantic_small {
   position: relative;
+  -webkit-touch-callout: none; /* iOS Safari */
+    -webkit-user-select: none; /* Safari */
+     -khtml-user-select: none; /* Konqueror HTML */
+       -moz-user-select: none; /* Firefox */
+        -ms-user-select: none; /* Internet Explorer/Edge */
+            user-select: none; /* Non-prefixed version, currently
+                                  supported by Chrome and Opera */
 }
-div::before, 
-p::before, 
-h1::before, 
-strong::before, 
-em::before, 
-table::before, 
-small::before {
+.semantic_div::before, 
+.semantic_p::before, 
+.semantic_h1::before, 
+.semantic_strong::before, 
+.semantic_em::before, 
+.semantic_table::before, 
+.semantic_small::before {
   position: absolute;
   font-size: 70%;
   right: 0;
@@ -25,82 +32,82 @@ small::before {
   font-family: sans-serif;
 }
 
-div, 
-p, 
-h1 {
+.semantic_div, 
+.semantic_p, 
+.semantic_h1 {
   margin: 0;
   padding: 15px;
 }
 
-div ~ *, 
-p ~ *, 
-h1 ~ * {
+.semantic_div ~ *, 
+.semantic_p ~ *, 
+.semantic_h1 ~ * {
   margin-top: 15px;
 }
-strong, 
-em {
+.semantic_strong, 
+.semantic_em {
   padding: 1px;
 }
-div {
+.semantic_div {
   border: 1px solid #ff9900;
   background: #ffeedd;
 }
-div::before {
+.semantic_div::before {
   content: "div";
   background: #ff9900;
 }
-p {
+.semantic_p {
   border: 1px solid #77cc99;
   background: #d8f2e7;
 }
-p::before {
+.semantic_p::before {
   content: "p";
   background: #77cc99;
 }
-h1 {
+.semantic_h1 {
   border: 1px solid #ff5500;
   background: #ffbbaa;
 }
-h1::before {
+.semantic_h1::before {
   content: "h1";
   background: #ff5500;
 }
-strong {
+.semantic_strong {
   border: 1px solid #aa55ee;
   background: #e7ddfa;
   padding-right: 35px;
   /* font-weight: normal; */
 }
-strong::before {
+.semantic_strong::before {
   content: "strong";
   background: #aa55ee;
 }
-small {
+.semantic_small {
   border: 1px solid #ee5583;
   background: #e7ddfa;
   padding-right: 35px;
   /* font-weight: normal; */
 }
-small::before {
+.semantic_small::before {
   content: "small";
   background: #e68fa9;
 }
-table {
+.semantic_table {
   border: 1px solid #dfee55;
   background: #f0fadd;
   padding-right: 35px;
   /* font-weight: normal; */
 }
-table::before {
+.semantic_table::before {
   content: "table";
   background: #dfee55;
 }
-em {
+.semantic_em {
   border: 1px solid #ee88cc;
   background: #f6ccdd;
   padding-right: 20px;
 }
-em::before {
+.semantic_em::before {
   content: "em";
   background: #ee88cc;
 }

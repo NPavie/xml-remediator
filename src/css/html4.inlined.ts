@@ -77,4 +77,7 @@ BDO[DIR="rtl"]  { direction: rtl; unicode-bidi: bidi-override }
   h1, h2, h3,
   h4, h5, h6    { page-break-after: avoid }
   ul, ol, dl    { page-break-before: avoid }
+}
+.hovered {
+  background-color : skyblue;
 }`;

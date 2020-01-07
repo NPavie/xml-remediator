@@ -4,7 +4,7 @@ import BoxTreeWalker, { BoxFilter, assertThat } from "./BoxTreeWalker";
 import QName from './QName';
 
 
-class InputRange {
+export class InputRange {
     // 0-based index of start block
     public startBlockIndex:number;
     // if non-negative, 0-based index of the start inline unit within the start block
@@ -21,36 +21,39 @@ class InputRange {
     }
 };
 
-export default class Transformations{
+/**
+ * Transformation to apply on the input range of a given doc
+ */
+export default class Transformation{
 
     private static readonly HTML_NS = "http://www.w3.org/1999/xhtml";
 	private static readonly EPUB_NS = "http://www.idpf.org/2007/ops";
-	private static readonly DIV = new QName({namespace:Transformations.HTML_NS, localPart:"div"});
-	private static readonly P = new QName({namespace:Transformations.HTML_NS, localPart:"p"});
-	private static readonly SPAN = new QName({namespace:Transformations.HTML_NS, localPart:"span"});
-	private static readonly STRONG = new QName({namespace:Transformations.HTML_NS, localPart:"strong"});
-	private static readonly EM = new QName({namespace:Transformations.HTML_NS, localPart:"em"});
-	private static readonly SMALL = new QName({namespace:Transformations.HTML_NS, localPart:"small"});
-	private static readonly IMG = new QName({namespace:Transformations.HTML_NS, localPart:"img"});
-	private static readonly LI = new QName({namespace:Transformations.HTML_NS, localPart:"li"});
-	private static readonly UL = new QName({namespace:Transformations.HTML_NS, localPart:"ul"});
-	private static readonly OL = new QName({namespace:Transformations.HTML_NS, localPart:"ol"});
-	private static readonly A = new QName({namespace:Transformations.HTML_NS, localPart:"a"});
+	private static readonly DIV = new QName({namespace:Transformation.HTML_NS, localPart:"div"});
+	private static readonly P = new QName({namespace:Transformation.HTML_NS, localPart:"p"});
+	private static readonly SPAN = new QName({namespace:Transformation.HTML_NS, localPart:"span"});
+	private static readonly STRONG = new QName({namespace:Transformation.HTML_NS, localPart:"strong"});
+	private static readonly EM = new QName({namespace:Transformation.HTML_NS, localPart:"em"});
+	private static readonly SMALL = new QName({namespace:Transformation.HTML_NS, localPart:"small"});
+	private static readonly IMG = new QName({namespace:Transformation.HTML_NS, localPart:"img"});
+	private static readonly LI = new QName({namespace:Transformation.HTML_NS, localPart:"li"});
+	private static readonly UL = new QName({namespace:Transformation.HTML_NS, localPart:"ul"});
+	private static readonly OL = new QName({namespace:Transformation.HTML_NS, localPart:"ol"});
+	private static readonly A = new QName({namespace:Transformation.HTML_NS, localPart:"a"});
 	private static readonly HREF = new QName({namespace:"", localPart:"href"});
-	private static readonly FIGURE = new QName({namespace:Transformations.HTML_NS, localPart:"figure"});
-	private static readonly FIGCAPTION = new QName({namespace:Transformations.HTML_NS, localPart:"figcaption"});
-	private static readonly H1 = new QName({namespace:Transformations.HTML_NS, localPart:"h1"});
-	private static readonly H2 = new QName({namespace:Transformations.HTML_NS, localPart:"h2"});
-	private static readonly H3 = new QName({namespace:Transformations.HTML_NS, localPart:"h3"});
-	private static readonly H4 = new QName({namespace:Transformations.HTML_NS, localPart:"h4"});
-	private static readonly H5 = new QName({namespace:Transformations.HTML_NS, localPart:"h5"});
-	private static readonly H6 = new QName({namespace:Transformations.HTML_NS, localPart:"h6"});
+	private static readonly FIGURE = new QName({namespace:Transformation.HTML_NS, localPart:"figure"});
+	private static readonly FIGCAPTION = new QName({namespace:Transformation.HTML_NS, localPart:"figcaption"});
+	private static readonly H1 = new QName({namespace:Transformation.HTML_NS, localPart:"h1"});
+	private static readonly H2 = new QName({namespace:Transformation.HTML_NS, localPart:"h2"});
+	private static readonly H3 = new QName({namespace:Transformation.HTML_NS, localPart:"h3"});
+	private static readonly H4 = new QName({namespace:Transformation.HTML_NS, localPart:"h4"});
+	private static readonly H5 = new QName({namespace:Transformation.HTML_NS, localPart:"h5"});
+	private static readonly H6 = new QName({namespace:Transformation.HTML_NS, localPart:"h6"});
 
 	private static readonly EPUB_TYPE_Z3998_POEM:Map<QName,string> = new Map<QName,string>([
-            [new QName({namespace: Transformations.EPUB_NS, localPart : "type"}), "z3998:poem"]
+            [new QName({namespace: Transformation.EPUB_NS, localPart : "type"}), "z3998:poem"]
         ]);
     private static readonly EPUB_TYPE_PAGEBREAK:Map<QName,string> = new Map<QName,string>([
-        [new QName({namespace: Transformations.EPUB_NS, localPart : "type"}), "pagebreak"]
+        [new QName({namespace: Transformation.EPUB_NS, localPart : "type"}), "pagebreak"]
     ]);
     
 
@@ -75,7 +78,7 @@ export default class Transformations{
 	
 	transformTable(singleRow:boolean){
 		this.doc = this.moveToRange(this.doc, this.currentRange!);
-		this.doc = Transformations.transformTable(this.doc, this.currentRange!.size, singleRow);
+		this.doc = Transformation.transformTable(this.doc, this.currentRange!.size, singleRow);
 		return this;
 	}
 
@@ -88,7 +91,7 @@ export default class Transformations{
 		if (doc.current().isBlockAndHasNoBlockChildren())
 			assertThat(n == 0);
 		else {
-			doc = Transformations.moveNBlocks(doc, n + 1);
+			doc = Transformation.moveNBlocks(doc, n + 1);
 			if (range.startInlineIndex >= 0) {
                 let isReplacedElementOrTextBox = (b:Box) => {
                    	return b.hasText() || b.isReplacedElement();
@@ -143,20 +146,20 @@ export default class Transformations{
 			assertThat(doc.parent().isPresent());
 			}
 		}
-		doc.renameCurrent(Transformations.DIV);
+		doc.renameCurrent(Transformation.DIV);
 		// check that this is the first cell in the row
 		assertThat(!doc.previousSibling().isPresent());
 		//  rename other cells in this row
 		while (doc.nextSibling().isPresent()) {
             let props = doc.current().props.cssprops;
 			assertThat(props ? props.display == "table-cell" : false);
-			doc.renameCurrent(Transformations.DIV);
+			doc.renameCurrent(Transformation.DIV);
 		}
 		// rename row
         assertThat(doc.parent().isPresent());
         let props = doc.current().props.cssprops;
 		assertThat(props ? props.display == "table-row" : false);
-		doc.renameCurrent(Transformations.DIV);
+		doc.renameCurrent(Transformation.DIV);
 		// check that this is the first row in the table (or tbody)
 		assertThat(!doc.previousSibling().isPresent());
 		if (singleRow)
@@ -166,13 +169,13 @@ export default class Transformations{
 			while (doc.nextSibling().isPresent()) {
                 props = doc.current().props.cssprops;
 				assertThat(props ? props.display == "table-row" : false);
-				doc.renameCurrent(Transformations.DIV);
+				doc.renameCurrent(Transformation.DIV);
 				assertThat(doc.firstChild().isPresent());
-				doc.renameCurrent(Transformations.DIV);
+				doc.renameCurrent(Transformation.DIV);
 				while (doc.nextSibling().isPresent()) {
                     props = doc.current().props.cssprops;
 					assertThat(props ? props.display == "table-cell" : false);
-					doc.renameCurrent(Transformations.DIV);
+					doc.renameCurrent(Transformation.DIV);
 				}
 				doc.parent();
 			}
@@ -205,38 +208,38 @@ export default class Transformations{
             headerElement:QName) {
 		assertThat(doc.current().isBlockAndHasNoBlockChildren());
 		if (indexOfHeading >= 0) {
-			doc = Transformations.moveNBlocks(doc, indexOfHeading);
+			doc = Transformation.moveNBlocks(doc, indexOfHeading);
 			// move to parent block if no siblings
-			doc = Transformations.wrapIfNeeded(doc, 1);
+			doc = Transformation.wrapIfNeeded(doc, 1);
 		} else {
 			// find ancestor that contains the specified number of blocks, or create it
-			doc = Transformations.wrapIfNeeded(doc, blockCount);
+			doc = Transformation.wrapIfNeeded(doc, blockCount);
 		}
 		// rename to heading
 		doc.renameCurrent(headingElement);
 		// remove strong, em and small within the heading
-		doc = Transformations.removeEmInAllEmBox(doc, Transformations.STRONG);
-		doc = Transformations.removeEmInAllEmBox(doc, Transformations.EM);
-		doc = Transformations.removeEmInAllEmBox(doc, Transformations.SMALL);
+		doc = Transformation.removeEmInAllEmBox(doc, Transformation.STRONG);
+		doc = Transformation.removeEmInAllEmBox(doc, Transformation.EM);
+		doc = Transformation.removeEmInAllEmBox(doc, Transformation.SMALL);
 		// remove all div and p within the heading
 		// remove all span within the heading
 		let h = doc.subTree();
         let isDivOrPOrSpan = (b?:Box) => {
                 if( b && b.getName() )
-                    return Transformations.DIV.equals(b.getName()!) 
-                        || Transformations.P.equals(b.getName()!) 
-                        || Transformations.SPAN.equals(b.getName()!);
+                    return Transformation.DIV.equals(b.getName()!) 
+                        || Transformation.P.equals(b.getName()!) 
+                        || Transformation.SPAN.equals(b.getName()!);
                 else return false;}
 		while (h.firstDescendant(isDivOrPOrSpan).isPresent() || h.firstFollowing(isDivOrPOrSpan).isPresent()) {
-			if (!Transformations.SPAN.equals(h.current().getName()!))
-				h.renameCurrent(Transformations.SPAN);
+			if (!Transformation.SPAN.equals(h.current().getName()!))
+				h.renameCurrent(Transformation.SPAN);
 			h.markCurrentForUnwrap();
 		}
 		if (indexOfHeading >= 0 && headerElement != null) {
-			doc = Transformations.moveNBlocks(doc, - indexOfHeading);
+			doc = Transformation.moveNBlocks(doc, - indexOfHeading);
 			// find ancestor that contains the specified number of blocks, or create it
 			assertThat(blockCount > 1);
-			doc = Transformations.wrapIfNeeded(doc, blockCount);
+			doc = Transformation.wrapIfNeeded(doc, blockCount);
 			// rename to header
 			doc.renameCurrent(headerElement);
 			// make sure there is only one heading inside the header
@@ -245,13 +248,13 @@ export default class Transformations{
 			do {
 				if (indexOfHeading-- != 0) {
 					let name = header.current().getName();
-                    if (name && (Transformations.H1.equals(name) 
-                            || Transformations.H2.equals(name) 
-                            || Transformations.H3.equals(name) 
-                            || Transformations.H4.equals(name) 
-                            || Transformations.H5.equals(name) 
-                            || Transformations.H6.equals(name)))
-						header.renameCurrent(Transformations.P);
+                    if (name && (Transformation.H1.equals(name) 
+                            || Transformation.H2.equals(name) 
+                            || Transformation.H3.equals(name) 
+                            || Transformation.H4.equals(name) 
+                            || Transformation.H5.equals(name) 
+                            || Transformation.H6.equals(name)))
+						header.renameCurrent(Transformation.P);
 				}
 			} while (header.firstFollowing(BoxFilter.isBlockAndHasNoBlockChildren).isPresent());
 		}
@@ -263,7 +266,7 @@ export default class Transformations{
 			size:number) {
         assertThat(size == 1);
         let name = doc.current().getName();
-		assertThat(name ? Transformations.IMG.equals(name) : false);
+		assertThat(name ? Transformation.IMG.equals(name) : false);
 		assertThat(doc.current().isReplacedElement());
 		doc.markCurrentForRemoval();
 		// also remove parent elements that have no other content than the img
@@ -282,7 +285,7 @@ export default class Transformations{
             listItemElement:QName){
 		assertThat(doc.current().isBlockAndHasNoBlockChildren());
 		// find ancestor that contains the specified number of blocks, or create it
-		doc = Transformations.wrapIfNeeded(doc, blockCount);
+		doc = Transformation.wrapIfNeeded(doc, blockCount);
 		// rename to list or wrap with new list element
 		if (doc.current().isBlockAndHasNoBlockChildren())
 			doc.wrapCurrent(listElement, listAttributes);
@@ -300,11 +303,11 @@ export default class Transformations{
 	private static convertToPoem(
 			doc:BoxTreeWalker, 
 			blockCount:number) {
-        return Transformations.convertToList(doc, 
+        return Transformation.convertToList(doc, 
                 blockCount, 
-                Transformations.DIV, 
-                Transformations.EPUB_TYPE_Z3998_POEM, 
-                Transformations.P);
+                Transformation.DIV, 
+                Transformation.EPUB_TYPE_Z3998_POEM, 
+                Transformation.P);
 	}
 
 	private static transformNavList(
@@ -320,7 +323,7 @@ export default class Transformations{
                     && (listBlockCount = count(tmp, BoxFilter.isBlockAndHasNoBlockChildren)) <= blockCount) {
                 doc = tmp;
                 let name = doc.current().getName();
-				if (listBlockCount == blockCount && (name ? Transformations.OL.equals(name) : false))
+				if (listBlockCount == blockCount && (name ? Transformation.OL.equals(name) : false))
 					break;
 			} else
 				assertThat(false);
@@ -330,17 +333,17 @@ export default class Transformations{
             assertThat(ol.firstChild().isPresent());
             do {
                 let name  = ol.current().getName();
-                assertThat(name ? Transformations.LI.equals(name) : false);
+                assertThat(name ? Transformation.LI.equals(name) : false);
                 assertThat(ol.firstChild().isPresent());
                 let childCount = 1;
                 while (ol.nextSibling().isPresent()) childCount++;
                 name  = ol.current().getName();
-                if (childCount == 1 &&  (name ? Transformations.A.equals(name) : false) && ol.current().getAttributes().has(Transformations.HREF)) {
+                if (childCount == 1 &&  (name ? Transformation.A.equals(name) : false) && ol.current().getAttributes().has(Transformation.HREF)) {
                     ol.parent();
                     continue;
                 }
                 name  = ol.current().getName();
-                if (name ? Transformations.OL.equals(name) : false) {
+                if (name ? Transformation.OL.equals(name) : false) {
                     if (childCount == 1)
                         assertThat(false);
                     // process nested list
@@ -348,19 +351,19 @@ export default class Transformations{
                     if (childCount == 2) {
                         ol.previousSibling();
                         name  = ol.current().getName();
-                        if ((name ? Transformations.A.equals(name) : false) && ol.current().getAttributes().has(Transformations.HREF)) {
+                        if ((name ? Transformation.A.equals(name) : false) && ol.current().getAttributes().has(Transformation.HREF)) {
                             ol.parent();
                             continue;
                         }
                     } else {
                         ol.parent();
-                        ol.wrapFirstChildren(childCount - 1, Transformations.SPAN);
+                        ol.wrapFirstChildren(childCount - 1, Transformation.SPAN);
                         childCount = 2;
                         ol.firstChild();
                     }
                 } else if (childCount > 1) {
                     ol.parent();
-                    ol.wrapChildren(Transformations.SPAN);
+                    ol.wrapChildren(Transformation.SPAN);
                     childCount = 1;
                     ol.firstChild();
                 }
@@ -368,7 +371,7 @@ export default class Transformations{
                 let span = ol.subTree();
                 let isAWithHref = (b?:Box) => {
                         let name = b ? b.getName() : undefined;
-                        return (name ? Transformations.A.equals(name) : false) && (b ? b.getAttributes().has(Transformations.HREF) : false) ;
+                        return (name ? Transformation.A.equals(name) : false) && (b ? b.getAttributes().has(Transformation.HREF) : false) ;
                     };
                 if (!span.firstDescendant(isAWithHref).isPresent())
                     if (childCount == 2) {
@@ -377,14 +380,14 @@ export default class Transformations{
                     } else
                         assertThat(false);
                 let a = span.current();
-                let href = a.getAttributes().get(Transformations.HREF);
+                let href = a.getAttributes().get(Transformation.HREF);
                 // remove this a and all other a with the same href
                 span.root();
                 let isAwithFoundHref = (b?:Box)=>{
                     let name = b ? b.getName() : undefined;
-                    return (name ? Transformations.A.equals(name) : false) && (b ? href === b.getAttributes().get(Transformations.HREF) : false) ;
+                    return (name ? Transformation.A.equals(name) : false) && (b ? href === b.getAttributes().get(Transformation.HREF) : false) ;
                 };
-                span = Transformations.unwrapAll(span,isAwithFoundHref);
+                span = Transformation.unwrapAll(span,isAwithFoundHref);
                 // rename span to a
                 span.renameCurrent(a.getName()!, a.getAttributes());
                 ol.parent();
@@ -397,10 +400,10 @@ export default class Transformations{
 		let toc = doc.subTree();
 		let isDivOrP = (b?:Box) => {
 			let name = b ? b.getName() : undefined;
-			return name ? Transformations.DIV.equals(name) || Transformations.P.equals(name) : false;
+			return name ? Transformation.DIV.equals(name) || Transformation.P.equals(name) : false;
 		};
 		while (toc.firstDescendant(isDivOrP).isPresent() || toc.firstFollowing(isDivOrP).isPresent()) {
-			toc.renameCurrent(Transformations.SPAN);
+			toc.renameCurrent(Transformation.SPAN);
 			toc.markCurrentForUnwrap();
 		}
 		return doc;
@@ -412,7 +415,7 @@ export default class Transformations{
 			preContentBlockCount:number,
 			wrapper:QName) {
 		assertThat(doc.current().isBlockAndHasNoBlockChildren());
-		doc = Transformations.moveNBlocks(doc, preContentBlockCount);
+		doc = Transformation.moveNBlocks(doc, preContentBlockCount);
 		// find list element
 		let listBlockCount = 1;
 		while (true) {
@@ -424,7 +427,7 @@ export default class Transformations{
 					doc = tmp;
 					let name = doc.current().getName();
 					if (listBlockCount == (blockCount - preContentBlockCount)
-							&& (name ? Transformations.OL.equals(name) || Transformations.UL.equals(name) : false))
+							&& (name ? Transformation.OL.equals(name) || Transformation.UL.equals(name) : false))
 						break;
 				} 
 			} else
@@ -455,7 +458,7 @@ export default class Transformations{
 			assertThat(doc.parent().isPresent());
 			let name = doc.current().getName();
 			if (!(name ? wrapper.equals(name) : false))
-				if (name ? Transformations.DIV.equals(name) : false)
+				if (name ? Transformation.DIV.equals(name) : false)
 					doc.renameCurrent(wrapper);
 				else {
 					doc.wrapChildren(wrapper);
@@ -468,7 +471,7 @@ export default class Transformations{
 	private static wrapListInPrevious(
 			doc:BoxTreeWalker,
 			blockCount:number) {
-		doc = Transformations.wrapList(doc, blockCount, 1, new QName({localPart:"_"}));
+		doc = Transformation.wrapList(doc, blockCount, 1, new QName({localPart:"_"}));
 		let wrapper = doc.firstChild().value!.getName()!;
 		doc.renameCurrent(new QName({localPart:""}));
 		doc.parent();
@@ -484,24 +487,24 @@ export default class Transformations{
 		assertThat(blockCount > captionBlockCount);
 		if (captionBlockCount > 0) {
 			if (!captionBefore)
-				doc = Transformations.moveNBlocks(doc, blockCount - captionBlockCount);
-			doc = Transformations.wrapIfNeeded(doc, captionBlockCount);
-			doc.renameCurrent(Transformations.FIGCAPTION);
-			doc = Transformations.removeEmInAllEmBox(doc, Transformations.STRONG);
-			doc = Transformations.removeEmInAllEmBox(doc, Transformations.EM);
-			doc = Transformations.removeEmInAllEmBox(doc, Transformations.SMALL);
+				doc = Transformation.moveNBlocks(doc, blockCount - captionBlockCount);
+			doc = Transformation.wrapIfNeeded(doc, captionBlockCount);
+			doc.renameCurrent(Transformation.FIGCAPTION);
+			doc = Transformation.removeEmInAllEmBox(doc, Transformation.STRONG);
+			doc = Transformation.removeEmInAllEmBox(doc, Transformation.EM);
+			doc = Transformation.removeEmInAllEmBox(doc, Transformation.SMALL);
 			if (!captionBefore)
-				doc = Transformations.moveNBlocks(doc, captionBlockCount - blockCount);
+				doc = Transformation.moveNBlocks(doc, captionBlockCount - blockCount);
 			else if (!doc.current().isBlockAndHasNoBlockChildren())
 				doc.firstDescendant(BoxFilter.isBlockAndHasNoBlockChildren);
 		}
-		doc = Transformations.wrapIfNeeded(doc, blockCount);
-		doc.renameCurrent(Transformations.FIGURE);
+		doc = Transformation.wrapIfNeeded(doc, blockCount);
+		doc.renameCurrent(Transformation.FIGURE);
 		if (blockCount - captionBlockCount == 1 && captionBlockCount != 0) {
 			doc.firstChild();
 			doc.nextSibling();
 			let name = doc.current().getName();
-			if ( name ? Transformations.DIV.equals(name) || Transformations.P.equals(name): false)
+			if ( name ? Transformation.DIV.equals(name) || Transformation.P.equals(name): false)
 				doc.markCurrentForUnwrap();
 		}
 		return doc;
@@ -542,7 +545,7 @@ export default class Transformations{
 	        size:number){
 		assertThat(doc.current().isBlockAndHasNoBlockChildren());
 		assertThat(size == 1);
-		doc.renameCurrent(Transformations.DIV, Transformations.EPUB_TYPE_PAGEBREAK);
+		doc.renameCurrent(Transformation.DIV, Transformation.EPUB_TYPE_PAGEBREAK);
 		return doc;
 	}
 
@@ -563,7 +566,7 @@ export default class Transformations{
 			if (!(name ? emElement.equals(name) : false)) {
 
 				if (box.current().hasText()
-				    	&& !Transformations.WHITE_SPACE.test(box.current().props.text!)) {
+				    	&& !Transformation.WHITE_SPACE.test(box.current().props.text!)) {
 					allStrong = false;
 					break;
 				}
@@ -580,7 +583,7 @@ export default class Transformations{
 				let name = b ? b.getName() : undefined;
 				return name ? emElement.equals(name) : false;
 			}
-			Transformations.unwrapAll(box, filter);
+			Transformation.unwrapAll(box, filter);
 		}
 		return doc;
 	}

@@ -24,48 +24,31 @@
   font-size: 14pt;
   color: white;
   z-index: 1;
+  position: absolute;
+  height: 30px;
 }
 
 .App-frame{
-    position:absolute;
-    top:35px;
-    bottom: 0px;
+    position: fixed;
+    top:30px;
+    bottom: 20px;
     left: 0;
     right: 0;
     
-
 }
 
-.App-content{
-  height: 100%;
-  width: 80%;
-  float: left;
-  
-}
 
 .App-footer{
   position: absolute;
   bottom: 0;
   left:0;
   right:0;
-  height: 35px;
+  height: 10%;
 }
 
 .App-link {
   color: #09d3ac;
 }
-
-/*
-.App-input-viewer {
-  position: absolute;
-  top:0;
-  bottom: 0;
-  width: 40%;
-  -webkit-transition: 0.5s;
-  -moz-transition: 0.5s;
-  -o-transition: 0.5s;
-  transition: 0.5s;
-} */
 
 .App-remediation {
   position: absolute;
@@ -131,19 +114,21 @@
   
 }
 
-.boxlist__table{
-  border-collapse: collapse;
-}
 
-.boxlist__data{
-  width: 30%;
-}
-
-.boxlist__content{
-  width:auto;
-}
-
-.context_menu{
+.App-context_menu{
   float: right;
   width: 19%;
+}
+
+
+.document-in{
+  float: right;
+  width: 49%;
+  height: 99%;
+}
+
+.document-out{
+  float: right;
+  width: 49%;
+  height: 99%;
 }
