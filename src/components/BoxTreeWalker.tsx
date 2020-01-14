@@ -63,9 +63,6 @@ export default class BoxTreeWalker {
 	
 	
 	subTree():BoxTreeWalker {
-		if (this.path.length == 0)
-            return this;
-		
 		return this.path.length === 0 ? 
 			this : 
 			new BoxTreeWalker(
@@ -196,11 +193,17 @@ export default class BoxTreeWalker {
 					return previous;
 				else
 					while (true) {
-						if (!(previous = this.previousSibling()).done) {
+						var p;
+						if (!(p = this.previousSibling()).done) {
+							previous = p;
 							while (true)
-								if (!(previous = this.firstChild()).done) {
-									if (!(previous = this.nextSibling()).done)
-										while (!(previous = this.nextSibling()).done);
+								if (!(p = this.firstChild()).done) {
+									previous = p;
+									if (!(p = this.nextSibling()).done) {
+										previous = p;
+										while (!(p = this.nextSibling()).done)
+											previous = p;
+									}
 								} else
 									break;
 						} else {
@@ -260,25 +263,18 @@ export default class BoxTreeWalker {
 		let startDepth = this.path.length;
 		while (true) {
 			let next = this.firstChild();
-			if(!next.isPresent()){
-				if(this.path.length === startDepth){
+			if (!(!(next = this.firstChild()).done))
+				if (this.path.length === startDepth)
 					return noSuchElement;
-				} else {
-					next = this.nextSibling();
-					if(!next.isPresent()){
-
-					}
-				}
-			}
-			if (!(!(next = this.firstChild()).done || this.path.length > startDepth && !(next = this.nextSibling()).done))
-				while (true)
-					if (!(next = this.parent()).done) {
-						if (this.path.length == startDepth)
-							return noSuchElement;
-						if (!(next = this.nextSibling()).done)
+				else if ((next = this.nextSibling()).done)
+					while (true)
+						if (!(next = this.parent()).done) {
+							if (this.path.length == startDepth)
+								return noSuchElement;
+							if (!(next = this.nextSibling()).done)
+								break;
+						} else
 							break;
-					} else
-						break;
 			if (!next.done) {
 				if (filter && filter(next.value)) return next;
 			} else
