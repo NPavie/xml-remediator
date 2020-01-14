@@ -6,17 +6,16 @@ import CanNotPerformTransformationException from './exceptions/CanNotPerformTran
 import { Box, Rendering } from './Box';
 import Optional from './Optional';
 
+import NoSuchElementException from './exceptions/NoSuchElementException';
+import CanNotDoWalkerActionException from './exceptions/CanNotDoWalkerActionException';
+
 
 function deepCopyStack(stack:Array<ListIterator<Box>>) {
 	return stack.map(iterable => iterable.clone());
 }
 
-export function assertThat(test:boolean) {
-	if (!test) throw new CanNotPerformTransformationException();
-}
 
-
-var noSuchElement = Optional.of<Box>(undefined);
+var noSuchElement = Optional.empty<Box>();
 
 /**
  * names
@@ -33,23 +32,32 @@ export class BoxFilter{
 }
 
 export default class BoxTreeWalker {
-    _root: Box;
-    path: Array<ListIterator<Box>>;
-    public _current: Box;
-
 	
+	_root: Box;
+	private _current: Box;
+
+    path: Array<ListIterator<Box>>;
+	
+	
+	// For subtrees
+	private _full_tree?:BoxTreeWalker;
+
+	static assertThat(test:boolean,message?:string) {
+		if (!test) throw new CanNotDoWalkerActionException(message);
+	}
     
-	constructor(root:Box, updateRootCallback?:((newroot:Box)=>void)) {
+	constructor(root:Box, updateRootCallback?:((newroot:Box)=>void),full_tree?:BoxTreeWalker) {
 		this._root = root;
 		this.path = [];
         this._current = root;
-        if(updateRootCallback) this.updateRoot = updateRootCallback;
+		if(updateRootCallback) this.updateRoot = updateRootCallback.bind(this);
+		this._full_tree = full_tree;
 	}
     
     clone():BoxTreeWalker {
         let clone = new BoxTreeWalker(this._root);
 		clone.path = deepCopyStack(this.path);
-        clone._current = this.current();
+        clone._current = this._current;
         return clone;
 	}
 	
@@ -57,129 +65,131 @@ export default class BoxTreeWalker {
 	subTree():BoxTreeWalker {
 		if (this.path.length == 0)
             return this;
-		let fullTree = this;
-		let subTree = new BoxTreeWalker(fullTree.current(), (root:Box) => {
-            if (this._root != fullTree.current())
-				throw new ConcurrentModificationException();
-			else {
-				this._root = root;
-				fullTree.updateCurrent(root);
-			}
-        });
-		return subTree;
-    }
-    
-	parent() {
-		if (this.path.length == 0)
-			return noSuchElement;
-		this.path.pop();
-		if (this.path.length == 0)
-			this._current = this._root;
-		else {
-			let peek = this.path[this.path.length - 1];
-			this._current = peek.previous().value!;
-			peek.next();
-		}
-		return Optional.of(this.current());
+		
+		return this.path.length === 0 ? 
+			this : 
+			new BoxTreeWalker(
+					this._current, 
+					((root:Box) => {
+						if (this._root != this._full_tree!.current())
+							throw new ConcurrentModificationException();
+						else {
+							this._root = root;
+							this._full_tree!.updateCurrent(root);
+						}
+				}), this);
 	}
 	
-	root() {
-		while (!this.parent().done);
-		return this.current();
-	}
-
-	current(){
+	current() : Box {
 		return this._current;
 	}
 
-	previousSibling() {
-		if (this.path.length == 0)
-			return noSuchElement;
-		let siblings = this.path[this.path.length - 1];
-		siblings.previous();
-		if (!siblings.hasPrevious()) {
-			siblings.next();
-			return noSuchElement;
+	/**
+	 * Reset the walker to the root of the tree and returns the current (root) box
+	 */
+	root() : Box {
+		while (this.parent().isPresent());
+		return this._current;
+	}
+
+	previousSibling() : Optional<Box> {
+		if (this.path.length === 0) return noSuchElement;
+		else {
+			let siblings = this.path[this.path.length - 1];
+			siblings.previous();
+			if (!siblings.hasPrevious()) {
+				siblings.next();
+				return noSuchElement;
+			} else {
+				this._current = siblings.previous().value;
+				siblings.next();
+				return Optional.of(this._current);
+			}
 		}
-		this._current = siblings.previous().value!;
-		siblings.next();
-		return Optional.of(this.current());
 	}
     
-    nextSibling() {
-		if (this.path.length == 0)
-			return noSuchElement;
-		let siblings = this.path[this.path.length - 1];
-		if (!siblings.hasNext())
-			return noSuchElement;
-		this._current = siblings.next().value;
-		return Optional.of(this.current());
+    nextSibling() : Optional<Box> {
+		if (this.path.length == 0) return noSuchElement;
+		else {
+			let siblings = this.path[this.path.length - 1];
+			if (!siblings.hasNext()) return noSuchElement;
+			else {	
+				this._current = siblings.next().value;
+				return Optional.of(this._current);
+			}
+		}
+		
 	}
-    
-    firstChild() {
-		let children = this.current().children;
-		if (!children.hasNext())
-			return noSuchElement;
-		this._current = children.next().value;
-		this.path.push(children);
-		return Optional.of(this.current());
+	
+	
+	parent() : Optional<Box> {
+		if (this.path.length == 0) return noSuchElement;
+		else {
+			this.path.pop();
+			if (this.path.length == 0) this._current = this._root;
+			else {
+				let peek = this.path[this.path.length - 1];
+				this._current = peek.previous().value;
+				peek.next();
+			}
+			return Optional.of(this._current);
+		}
+		
+	}
+	
+	
+    firstChild() : Optional<Box> {
+		let children = this._current.children;
+		if (!children.hasNext()) return noSuchElement;
+		else {
+			this._current = children.next().value;
+			this.path.push(children);
+			return Optional.of(this._current);
+		}
     }
-    
+    /**
+	 * 
+	 * @param filter 
+	 */
 	firstFollowing(filter?:(node?:Box)=>boolean) : Optional<Box>{
-		if (!filter) {
+		if (filter) { // firstFollowing(Predicate<Box> filter) signature
+			let savePath = deepCopyStack(this.path);
+			let saveCurrent = this._current;
+			let next:Optional<Box> = Optional.empty<Box>();
+			console.log(this);
+			while(true){
+				next = this.firstFollowing();
+				if(next.isPresent()){
+					if(filter(next.value)){
+						return next;
+					} else {
+						next = this.firstDescendant(filter);
+						if(next.isPresent()){
+							return next;
+						}
+					}
+				} else break;
+			}
+			this.path = savePath;
+			this._current = saveCurrent;
+			return noSuchElement;	
+		} else { // firstFollowing() signature
 			for (let i = this.path.length - 1; i >= 0 ; i--) {
 				let siblings = this.path[i];
 				if (siblings.hasNext()) {
 					this._current = siblings.next().value;
 					this.path.length = i + 1;
-					return Optional.of(this.current());
+					return Optional.of(this._current);
 				}
 			}
-			return noSuchElement;
-		} else {
-			let savePath = deepCopyStack(this.path);
-			let saveCurrent = this.current();
-			while (true) {
-				let next;
-				if (!(next = this.firstFollowing()).done) {
-					if (filter(next.value) || !(next = this.firstDescendant(filter)).done)
-						return next;
-				} else
-					break;
-			}
-			this.path = savePath;
-			this._current = saveCurrent;
 			return noSuchElement;
 		}
 	}
 
 	firstPreceding(filter?:(node?:Box)=>boolean) : Optional<Box> {
-		if (!filter) {
-			for (let i = this.path.length - 1; i >= 0 ; i--) {
-				let siblings = this.path[i];
-				siblings.previous();
-				if (siblings.hasPrevious()) {
-					this._current = siblings.previous().value!;
-					siblings.next();
-					this.path.length = i + 1;
-					while (true) {
-						let children = this.current().children;
-						if (children.hasNext()) {
-							while (children.hasNext()) {
-								this._current = children.next().value;
-								this.path.push(children);
-							}
-						} else
-							break;
-					}
-					return Optional.of(this.current());
-				} else
-					siblings.next();
-			}
-			return noSuchElement;
-		} else {
+		if(filter){
 			let savePath = deepCopyStack(this.path);
-			let saveCurrent = this.current();
+			let saveCurrent = this._current;
 			let previous;
 			if (!(previous = this.firstPreceding()).done) {
 				if (filter(previous.value))
@@ -205,31 +215,61 @@ export default class BoxTreeWalker {
 			this.path = savePath;
 			this._current = saveCurrent;
 			return noSuchElement;
+		} else { // firstPreceding() signature
+			for (let i = this.path.length - 1; i >= 0 ; i--) {
+				let siblings = this.path[i];
+				siblings.previous();
+				if (siblings.hasPrevious()) {
+					this._current = siblings.previous().value;
+					siblings.next();
+					this.path.length = i + 1;
+					while (true) {
+						let children = this._current.children;
+						if (children.hasNext()) {
+							while (children.hasNext()) {
+								this._current = children.next().value;
+								this.path.push(children);
+							}
+						} else break;
+					}
+					return Optional.of(this._current);
+				} else siblings.next();
+			}
+			return noSuchElement;
 		}
 	}
 
-	firstParent(filter?:(node?:Box)=>boolean) : Optional<Box> {
+	firstParent(filter:(node?:Box)=>boolean) : Optional<Box> {
 		for (let i = this.path.length - 2; i >= 0 ; i--) {
 			let parent = this.path[i].previous().value;
 			this.path[i].next();
-			if (filter && filter(parent)) {
+			if (filter(parent)) {
 				this.path.length = i + 1;
-				this._current = parent!;
-				return Optional.of(this.current());
+				this._current = parent;
+				return Optional.of(this._current);
 			}
 		}
-		if (filter && filter(this._root)) {
+		if (filter(this._root)) {
 			this.path.length = 0;
 			this._current = this._root;
-			return Optional.of(this.current());
-		}
-		return noSuchElement;
+			return Optional.of(this._current);
+		} else return noSuchElement;
 	}
 
-	firstDescendant(filter?:(node?:Box)=>boolean) : Optional<Box> {
+	firstDescendant(filter:(node?:Box)=>boolean) : Optional<Box> {
 		let startDepth = this.path.length;
 		while (true) {
-			let next;
+			let next = this.firstChild();
+			if(!next.isPresent()){
+				if(this.path.length === startDepth){
+					return noSuchElement;
+				} else {
+					next = this.nextSibling();
+					if(!next.isPresent()){
+
+					}
+				}
+			}
 			if (!(!(next = this.firstChild()).done || this.path.length > startDepth && !(next = this.nextSibling()).done))
 				while (true)
 					if (!(next = this.parent()).done) {
@@ -248,24 +288,24 @@ export default class BoxTreeWalker {
     }
     
 	renameCurrent(name:QName, attributes?:Map<QName,string>) {
-		let renamed = this.current().copy({name:name,attributes:attributes});
+		let renamed = this._current.copy({name:name,attributes:attributes});
 		this.updateCurrent(renamed);
-		return this.current();
+		return this._current;
     }
     
 	deleteFirstChild() {
-		let children = this.current().children;
+		let children = this._current.children;
 		if (!children.hasNext())
-			throw new RuntimeException("there is no first child");
+			throw new NoSuchElementException("there is no first child");
 		children.next();
-		this.updateCurrent(this.current().withChildren(children));
-		return this.current();
+		this.updateCurrent(this._current.withChildren(children));
+		return this._current;
 	}
 
 	unwrapFirstChild() {
-		let children = this.current().children;
+		let children = this._current.children;
 		if (!children.hasNext())
-			throw new RuntimeException("there is no first child");
+			throw new NoSuchElementException("there is no first child");
 		let firstChild = children.next().value;
 		children.previous();
 		let children_array = children.consume();
@@ -273,16 +313,16 @@ export default class BoxTreeWalker {
 			children_array[0] = firstChild.withName(null);
 		else
 			children_array = firstChild.children.consume().concat(children_array.slice(1));
-		this.updateCurrent(this.current().withChildren(children_array));
-		return this.current();
+		this.updateCurrent(this._current.withChildren(children_array));
+		return this._current;
 	}
 
 	unwrapNextSibling() {
 		if (this.path.length == 0)
-			throw new RuntimeException("there is no next sibling");
+			throw new NoSuchElementException("there is no next sibling");
 		let siblings = this.path[this.path.length - 1];
 		if (!siblings.hasNext())
-			throw new RuntimeException("there is no next sibling");
+			throw new NoSuchElementException("there is no next sibling");
 		let parent = this.parent().value;
 		let nextSibling = siblings.next().value;
 		let i = siblings.rewind();
@@ -294,27 +334,27 @@ export default class BoxTreeWalker {
 		this.updateCurrent(parent!.withChildren(siblings_array));
 		this.firstChild();
 		while (i-- > 2) this.nextSibling();
-		return this.current();
+		return this._current;
 	}
 	unwrapParent() {
 		if (this.path.length == 0)
-			throw new RuntimeException("there is no parent");
+			throw new NoSuchElementException("there is no parent");
 		if (this.path.length == 1)
-			throw new RuntimeException("root can not be unwrapped");
+			throw new CanNotDoWalkerActionException("root can not be unwrapped");
 		let siblings = this.path[this.path.length - 1];
 		this.parent();
 		let parentSiblings = this.path[this.path.length - 1];
-		let i = rewind(siblings);
-		let j = rewind(parentSiblings);
+		let i = BoxTreeWalker.rewind(siblings);
+		let j = BoxTreeWalker.rewind(parentSiblings);
 		let parentSiblings_array = parentSiblings.consume();
-		parentSiblings_array = parentSiblings_array.slice(0, j - 1).concat(consume(siblings)).concat(parentSiblings_array.slice(j));
+		parentSiblings_array = parentSiblings_array.slice(0, j - 1).concat(siblings.consume()).concat(parentSiblings_array.slice(j));
 		let newParent = this.parent().value;
 		if(newParent)
 			this.updateCurrent(newParent.withChildren(parentSiblings_array));
 		this.firstChild();
 		while (i-- > 1) this.nextSibling();
 		while (j-- > 1) this.nextSibling();
-		return this.current();
+		return this._current;
 	}
     
     protected updateRoot(newRoot:Box) {
@@ -331,8 +371,8 @@ export default class BoxTreeWalker {
 			while (this.path.length > 0) {
 				let siblings = this.path[this.path.length - 1];
 				let parent = this.parent().value;
-				let i = rewind(siblings);
-				let siblings_array = consume(siblings);
+				let i = BoxTreeWalker.rewind(siblings);
+				let siblings_array = siblings.consume();
 				siblings_array[i - 1] = cur;
 				cur = parent!.withChildren(siblings_array);
 				siblings = cur.children;
@@ -347,63 +387,67 @@ export default class BoxTreeWalker {
 
 
 	nthBlock(index:number) {
-		assertThat(!this.firstDescendant(isBlockAndHasNoBlockChildren).done);
+		BoxTreeWalker.assertThat(!this.firstDescendant(BoxFilter.isBlockAndHasNoBlockChildren).done);
 		for (let i = 0; i < index; i++)
-			assertThat(!this.firstFollowing(isBlockAndHasNoBlockChildren).done);
+			BoxTreeWalker.assertThat(!this.firstFollowing(BoxFilter.isBlockAndHasNoBlockChildren).done);
 	}
 
 	nthReplacedElementOrTextBox(index: number) {
-		assertThat(!this.firstDescendant(BoxFilter.isReplacedElementOrTextBox).done);
+		BoxTreeWalker.assertThat(!this.firstDescendant(BoxFilter.isReplacedElementOrTextBox).done);
 		for (let i = 0; i < index; i++)
-			assertThat(!this.firstFollowing(BoxFilter.isReplacedElementOrTextBox).done);
+			BoxTreeWalker.assertThat(!this.firstFollowing(BoxFilter.isReplacedElementOrTextBox).done);
+	}
+
+	static count(tree:BoxTreeWalker, filter:(b?:Box)=>boolean) {
+		var count = 0;
+		while (!tree.firstDescendant(filter).done || !tree.firstFollowing(filter).done)
+			count++;
+		return count;
 	}
 
 	count(filter:(b?:Box)=>boolean) {
-		let count = 0;
-		while (!this.firstDescendant(filter).done || !this.firstFollowing(filter).done)
-			count++;
-		return count;
+		return BoxTreeWalker.count(this,filter);
 	}
 
 	transformSingleRowTable(firstBlockIdx:number, blockCount:number) : BoxTreeWalker {
 		this.root();
 		this.nthBlock(firstBlockIdx);
 		while (true) {
-			assertThat(this.previousSibling().done);
-			let testedProps = this.current().props.cssprops;
+			BoxTreeWalker.assertThat(this.previousSibling().done);
+			let testedProps = this._current.props.cssprops;
 			if ( testedProps && testedProps.display == "table-cell")
 				break;
 			else {
-				assertThat(!(testedProps && testedProps.display === "block"));
-				assertThat(!this.parent().done);
+				BoxTreeWalker.assertThat(!(testedProps && testedProps.display === "block"));
+				BoxTreeWalker.assertThat(!this.parent().done);
 			}
 		}
 		this.renameCurrent(BoxTreeWalker.DIV);
-		assertThat(this.previousSibling().done);
+		BoxTreeWalker.assertThat(this.previousSibling().done);
 		while (true) {
 			if (!this.nextSibling().done) {
-				let testedProps = this.current().props.cssprops;
-				assertThat((testedProps && testedProps.display == "table-cell") || false);
+				let testedProps = this._current.props.cssprops;
+				BoxTreeWalker.assertThat((testedProps && testedProps.display == "table-cell") || false);
 				this.renameCurrent(BoxTreeWalker.DIV);
 			} else
 				break;
 		}
-		assertThat(!this.parent().done);
-		//assertThat(this.current().props.cssprops && this.current().props.cssprops.display == "table-row");
+		BoxTreeWalker.assertThat(!this.parent().done);
+		//BoxTreeWalker.assertThat(this._current.props.cssprops && this._current.props.cssprops.display == "table-row");
 		this.renameCurrent(BoxTreeWalker.DIV);
-		assertThat(this.nextSibling().done);
-		assertThat(this.previousSibling().done);
-		assertThat(!this.parent().done);
-		if (true) { // this.current().props.cssprops && this.current().props.cssprops.display == "table-row-group"
-			assertThat(this.nextSibling().done);
-			assertThat(this.previousSibling().done);
-			assertThat(!this.parent().done);
+		BoxTreeWalker.assertThat(this.nextSibling().done);
+		BoxTreeWalker.assertThat(this.previousSibling().done);
+		BoxTreeWalker.assertThat(!this.parent().done);
+		if (true) { // this._current.props.cssprops && this._current.props.cssprops.display == "table-row-group"
+			BoxTreeWalker.assertThat(this.nextSibling().done);
+			BoxTreeWalker.assertThat(this.previousSibling().done);
+			BoxTreeWalker.assertThat(!this.parent().done);
 		}
-		//assertThat(this.current().props.cssprops && this.current().props.cssprops.display == "table");
+		//BoxTreeWalker.assertThat(this._current.props.cssprops && this._current.props.cssprops.display == "table");
 		this.firstChild();
 		this.unwrapParent();
 		let table = this.subTree();
-		assertThat(count(table, isBlockAndHasNoBlockChildren) == blockCount);
+		BoxTreeWalker.assertThat(BoxTreeWalker.count(table, BoxFilter.isBlockAndHasNoBlockChildren) == blockCount);
 		return this;
 	}
 
@@ -416,10 +460,10 @@ export default class BoxTreeWalker {
 			let tmp: BoxTreeWalker = doc.clone();
 			if (tmp.previousSibling().done
 				&& !tmp.parent().done
-				&& count(tmp, isBlockAndHasNoBlockChildren) <= blockCount) {
+				&& BoxTreeWalker.count(tmp, BoxFilter.isBlockAndHasNoBlockChildren) <= blockCount) {
 				doc = tmp;
 			} else {
-				assertThat(count(doc, isBlockAndHasNoBlockChildren) == blockCount);
+				BoxTreeWalker.assertThat(BoxTreeWalker.count(doc, BoxFilter.isBlockAndHasNoBlockChildren) == blockCount);
 				break;
 			}
 		}
@@ -433,10 +477,10 @@ export default class BoxTreeWalker {
 			else if (!h1Walker.parent().done)
 				h1Walker.unwrapFirstChild();
 			else
-				throw new RuntimeException("coding error");
+				throw new Error("coding error");
 		// remove all div within the heading
 		h1Walker.root();
-		let isDiv: (node?: Box) => boolean = b => b ? DIV == b.props.name : true;
+		let isDiv: (node?: Box) => boolean = b => b ? BoxTreeWalker.DIV == b.props.name : true;
 		while (!h1Walker.firstDescendant(isDiv).done || !h1Walker.firstFollowing(isDiv).done)
 			h1Walker.renameCurrent(BoxTreeWalker._SPAN);
 		return doc;
@@ -446,11 +490,11 @@ export default class BoxTreeWalker {
 		this.root();
 		this.nthBlock(blockIdx);
 		if (inlineIdx >= 0) {
-			assertThat(inlineIdx < count(this, BoxFilter.isReplacedElementOrTextBox));
+			BoxTreeWalker.assertThat(inlineIdx < this.count(BoxFilter.isReplacedElementOrTextBox));
 			this.nthReplacedElementOrTextBox(inlineIdx);
 		}
-		assertThat(BoxTreeWalker.IMG == this.current().props.name);
-		assertThat(this.current().props.isReplacedElement);
+		BoxTreeWalker.assertThat(BoxTreeWalker.IMG == this._current.props.name);
+		BoxTreeWalker.assertThat(this._current.props.isReplacedElement);
 		this.renameCurrent(BoxTreeWalker._SPAN);
 		return this;
 	}
@@ -530,12 +574,12 @@ export default class BoxTreeWalker {
 				children = new ListIterator<Box>({supplier:new Array<Box>()[Symbol.iterator]()});
 		} else {
 			if (!this.firstChild().isPresent())
-				throw new RuntimeException("there are no children");
+				throw new NoSuchElementException("there are no children");
 			children = this.path[this.path.length - 1];
 			childrenToWrap.push(this._current);
 			for (let i = 1; i < childrenCount; i++)
 				if (!children.hasNext())
-					throw new RuntimeException("there are no " + childrenCount + " children");
+					throw new NoSuchElementException("there are no " + childrenCount + " children");
 				else
 					childrenToWrap.push(children.next().value);
 		}
@@ -582,13 +626,13 @@ export default class BoxTreeWalker {
 
 	public wrapNextSiblings(siblingCount:number, wrapper:QName, attributes?:Map<QName,string> ) {
 		if (this.path.length === 0)
-			throw new RuntimeException("there are no next siblings");
+			throw new NoSuchElementException("there are no next siblings");
 		let siblings = this.path[this.parent.length - 1];
 		let parent = this.parent().value;
 		let siblingsToWrap = new Array<Box>();
 		for (let i = 0; i < siblingCount; i++)
 			if (!siblings.hasNext())
-				throw new RuntimeException("there are no " + siblingCount + " next siblings");
+				throw new NoSuchElementException("there are no " + siblingCount + " next siblings");
 			else
 				siblingsToWrap.push(siblings.next().value);
 		let first = BoxTreeWalker.rewind(siblings) - siblingCount;

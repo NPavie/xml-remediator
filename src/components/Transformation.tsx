@@ -1,7 +1,8 @@
 
 import { Box } from "./Box";
-import BoxTreeWalker, { BoxFilter, assertThat } from "./BoxTreeWalker";
+import BoxTreeWalker, { BoxFilter } from "./BoxTreeWalker";
 import QName from './QName';
+import CanNotPerformTransformationException from "./exceptions/CanNotPerformTransformationException";
 
 
 export class InputRange {
@@ -13,8 +14,8 @@ export class InputRange {
     public size:number;
     
     constructor(startBlockIndex:number, startInlineIndex:number = -1, size:number = 1) {
-        if (startBlockIndex < 0) throw new IllegalArgumentException();
-        if (size < 1) throw new IllegalArgumentException();
+        if (startBlockIndex < 0) throw new Error('startBlockIndex cannot be negative');
+        if (size < 1) throw new Error("InputRange size cannot be less than 1");
         this.startBlockIndex = startBlockIndex;
         this.startInlineIndex = startInlineIndex;
         this.size = size;
@@ -26,46 +27,50 @@ export class InputRange {
  */
 export default class Transformation{
 
-    private static readonly HTML_NS = "http://www.w3.org/1999/xhtml";
-	private static readonly EPUB_NS = "http://www.idpf.org/2007/ops";
-	private static readonly DIV = new QName({namespace:Transformation.HTML_NS, localPart:"div"});
-	private static readonly P = new QName({namespace:Transformation.HTML_NS, localPart:"p"});
-	private static readonly SPAN = new QName({namespace:Transformation.HTML_NS, localPart:"span"});
-	private static readonly STRONG = new QName({namespace:Transformation.HTML_NS, localPart:"strong"});
-	private static readonly EM = new QName({namespace:Transformation.HTML_NS, localPart:"em"});
-	private static readonly SMALL = new QName({namespace:Transformation.HTML_NS, localPart:"small"});
-	private static readonly IMG = new QName({namespace:Transformation.HTML_NS, localPart:"img"});
-	private static readonly LI = new QName({namespace:Transformation.HTML_NS, localPart:"li"});
-	private static readonly UL = new QName({namespace:Transformation.HTML_NS, localPart:"ul"});
-	private static readonly OL = new QName({namespace:Transformation.HTML_NS, localPart:"ol"});
-	private static readonly A = new QName({namespace:Transformation.HTML_NS, localPart:"a"});
-	private static readonly HREF = new QName({namespace:"", localPart:"href"});
-	private static readonly FIGURE = new QName({namespace:Transformation.HTML_NS, localPart:"figure"});
-	private static readonly FIGCAPTION = new QName({namespace:Transformation.HTML_NS, localPart:"figcaption"});
-	private static readonly H1 = new QName({namespace:Transformation.HTML_NS, localPart:"h1"});
-	private static readonly H2 = new QName({namespace:Transformation.HTML_NS, localPart:"h2"});
-	private static readonly H3 = new QName({namespace:Transformation.HTML_NS, localPart:"h3"});
-	private static readonly H4 = new QName({namespace:Transformation.HTML_NS, localPart:"h4"});
-	private static readonly H5 = new QName({namespace:Transformation.HTML_NS, localPart:"h5"});
-	private static readonly H6 = new QName({namespace:Transformation.HTML_NS, localPart:"h6"});
+    public static readonly HTML_NS = "http://www.w3.org/1999/xhtml";
+	public static readonly EPUB_NS = "http://www.idpf.org/2007/ops";
+	public static readonly DIV = new QName({namespace:Transformation.HTML_NS, localPart:"div"});
+	public static readonly P = new QName({namespace:Transformation.HTML_NS, localPart:"p"});
+	public static readonly SPAN = new QName({namespace:Transformation.HTML_NS, localPart:"span"});
+	public static readonly STRONG = new QName({namespace:Transformation.HTML_NS, localPart:"strong"});
+	public static readonly EM = new QName({namespace:Transformation.HTML_NS, localPart:"em"});
+	public static readonly SMALL = new QName({namespace:Transformation.HTML_NS, localPart:"small"});
+	public static readonly IMG = new QName({namespace:Transformation.HTML_NS, localPart:"img"});
+	public static readonly LI = new QName({namespace:Transformation.HTML_NS, localPart:"li"});
+	public static readonly UL = new QName({namespace:Transformation.HTML_NS, localPart:"ul"});
+	public static readonly OL = new QName({namespace:Transformation.HTML_NS, localPart:"ol"});
+	public static readonly A = new QName({namespace:Transformation.HTML_NS, localPart:"a"});
+	public static readonly HREF = new QName({namespace:"", localPart:"href"});
+	public static readonly FIGURE = new QName({namespace:Transformation.HTML_NS, localPart:"figure"});
+	public static readonly FIGCAPTION = new QName({namespace:Transformation.HTML_NS, localPart:"figcaption"});
+	public static readonly H1 = new QName({namespace:Transformation.HTML_NS, localPart:"h1"});
+	public static readonly H2 = new QName({namespace:Transformation.HTML_NS, localPart:"h2"});
+	public static readonly H3 = new QName({namespace:Transformation.HTML_NS, localPart:"h3"});
+	public static readonly H4 = new QName({namespace:Transformation.HTML_NS, localPart:"h4"});
+	public static readonly H5 = new QName({namespace:Transformation.HTML_NS, localPart:"h5"});
+	public static readonly H6 = new QName({namespace:Transformation.HTML_NS, localPart:"h6"});
 
 	private static readonly EPUB_TYPE_Z3998_POEM:Map<QName,string> = new Map<QName,string>([
             [new QName({namespace: Transformation.EPUB_NS, localPart : "type"}), "z3998:poem"]
         ]);
     private static readonly EPUB_TYPE_PAGEBREAK:Map<QName,string> = new Map<QName,string>([
-        [new QName({namespace: Transformation.EPUB_NS, localPart : "type"}), "pagebreak"]
-    ]);
+			[new QName({namespace: Transformation.EPUB_NS, localPart : "type"}), "pagebreak"]
+		]);
     
 
     private doc:BoxTreeWalker;
     private root:BoxTreeWalker;
-    private currentRange?:InputRange;
+    private currentRange:InputRange;
 
     constructor(doc:Box){
         this.root = new BoxTreeWalker(doc);
         this.doc = this.root.subTree();
-        this.currentRange = undefined;
+        this.currentRange = new InputRange(0);
     }
+
+	static assertThat(test:boolean,message?:string) {
+		if (!test) throw new CanNotPerformTransformationException(message);
+	}
 
     get(){
         return this.root.current();
@@ -77,7 +82,8 @@ export default class Transformation{
     }
 	
 	transformTable(singleRow:boolean){
-		this.doc = this.moveToRange(this.doc, this.currentRange!);
+		
+		this.doc = this.moveToRange(this.doc, this.currentRange);
 		this.doc = Transformation.transformTable(this.doc, this.currentRange!.size, singleRow);
 		return this;
 	}
@@ -85,42 +91,49 @@ export default class Transformation{
     moveToRange(
 			doc:BoxTreeWalker, 
 			range:InputRange) {
-        assertThat(range != null);
+        Transformation.assertThat(range != null);
 		doc.root();
 		let n = range.startBlockIndex;
 		if (doc.current().isBlockAndHasNoBlockChildren())
-			assertThat(n == 0);
+			Transformation.assertThat(n === 0);
 		else {
 			doc = Transformation.moveNBlocks(doc, n + 1);
 			if (range.startInlineIndex >= 0) {
-                let isReplacedElementOrTextBox = (b:Box) => {
-                   	return b.hasText() || b.isReplacedElement();
-                };
-				
-				assertThat(range.startInlineIndex < count(doc, isReplacedElementOrTextBox));
-				assertThat(doc.firstDescendant(BoxFilter.isReplacedElementOrTextBox).isPresent());
-				for (let i = 0; i < range.startInlineIndex; ++i)
-					assertThat(doc.firstFollowing(BoxFilter.isReplacedElementOrTextBox).isPresent());
+                let isReplacedElementOrTextBox = (b?:Box) => {
+                   	return b ? (b.hasText() || b.isReplacedElement()) : false;
+				};
+				let c = Transformation.count(doc, isReplacedElementOrTextBox);
+				Transformation.assertThat(range.startInlineIndex < c, `${range.startInlineIndex} < ${c}`);
+				Transformation.assertThat(doc.firstDescendant(BoxFilter.isReplacedElementOrTextBox).isPresent());
+				for (let i = 0; i < range.startInlineIndex; ++i){
+					Transformation.assertThat(doc.firstFollowing(BoxFilter.isReplacedElementOrTextBox).isPresent());
+				}
+					
 			}
 		}
 		return doc;
 	}
 	
     
-    
+    /**
+	 * move
+	 * @param doc 
+	 * @param n 
+	 */
     private static moveNBlocks(
 			doc:BoxTreeWalker, 
 			n:number) {
 		if (n > 0) {
-			if (doc.firstDescendant(BoxFilter.isBlockAndHasNoBlockChildren).isPresent())
+			if(doc.firstDescendant(BoxFilter.isBlockAndHasNoBlockChildren).isPresent()){
 				n--;
-			while (n-- > 0)
-				assertThat(doc.firstFollowing(BoxFilter.isBlockAndHasNoBlockChildren).isPresent());
+			}
+			while (n-- > 0){
+				let testing = doc.firstFollowing(BoxFilter.isBlockAndHasNoBlockChildren);
+				Transformation.assertThat(testing.isPresent());
+			}
 		} else if (n < 0) {
-			if (doc.firstParent(BoxFilter.isBlockAndHasNoBlockChildren).isPresent())
-				n++;
-			while (n++ < 0)
-				assertThat(doc.firstPreceding(BoxFilter.isBlockAndHasNoBlockChildren).isPresent());
+			if (doc.firstParent(BoxFilter.isBlockAndHasNoBlockChildren).isPresent()) n++;
+			while (n++ < 0) Transformation.assertThat(doc.firstPreceding(BoxFilter.isBlockAndHasNoBlockChildren).isPresent());
 		}
 		return doc;
     }
@@ -134,64 +147,64 @@ export default class Transformation{
 			doc:BoxTreeWalker, 
 			blockCount:number, 
 			singleRow:boolean) {
-		assertThat(doc.current().isBlockAndHasNoBlockChildren());
+		Transformation.assertThat(doc.current().isBlockAndHasNoBlockChildren());
 		// find and rename first cell
 		while (true) {
-            assertThat(!doc.previousSibling().isPresent());
+            Transformation.assertThat(!doc.previousSibling().isPresent());
             let props = doc.current().props.cssprops;
-			if (props && props.display == "table-cell")
+			if (props && props.display === "table-cell")
 				break;
 			else {
-				assertThat(!(props ? props.display == "block" : false));
-			assertThat(doc.parent().isPresent());
+				Transformation.assertThat(!(props ? props.display === "block" : false));
+			Transformation.assertThat(doc.parent().isPresent());
 			}
 		}
 		doc.renameCurrent(Transformation.DIV);
 		// check that this is the first cell in the row
-		assertThat(!doc.previousSibling().isPresent());
+		Transformation.assertThat(!doc.previousSibling().isPresent());
 		//  rename other cells in this row
 		while (doc.nextSibling().isPresent()) {
             let props = doc.current().props.cssprops;
-			assertThat(props ? props.display == "table-cell" : false);
+			Transformation.assertThat(props ? props.display === "table-cell" : false);
 			doc.renameCurrent(Transformation.DIV);
 		}
 		// rename row
-        assertThat(doc.parent().isPresent());
+        Transformation.assertThat(doc.parent().isPresent());
         let props = doc.current().props.cssprops;
-		assertThat(props ? props.display == "table-row" : false);
+		Transformation.assertThat(props ? props.display === "table-row" : false);
 		doc.renameCurrent(Transformation.DIV);
 		// check that this is the first row in the table (or tbody)
-		assertThat(!doc.previousSibling().isPresent());
+		Transformation.assertThat(!doc.previousSibling().isPresent());
 		if (singleRow)
-			assertThat(!doc.nextSibling().isPresent());
+			Transformation.assertThat(!doc.nextSibling().isPresent());
 		else
 			// process other rows
 			while (doc.nextSibling().isPresent()) {
                 props = doc.current().props.cssprops;
-				assertThat(props ? props.display == "table-row" : false);
+				Transformation.assertThat(props ? props.display === "table-row" : false);
 				doc.renameCurrent(Transformation.DIV);
-				assertThat(doc.firstChild().isPresent());
+				Transformation.assertThat(doc.firstChild().isPresent());
 				doc.renameCurrent(Transformation.DIV);
 				while (doc.nextSibling().isPresent()) {
                     props = doc.current().props.cssprops;
-					assertThat(props ? props.display == "table-cell" : false);
+					Transformation.assertThat(props ? props.display === "table-cell" : false);
 					doc.renameCurrent(Transformation.DIV);
 				}
 				doc.parent();
 			}
-		assertThat(doc.parent().isPresent());
+		Transformation.assertThat(doc.parent().isPresent());
         // find table
         props = doc.current().props.cssprops;
-		if (props ? props.display == "table-row-group" : false) {
+		if (props ? props.display === "table-row-group" : false) {
 			// check that there is only one tbody and no thead or tfoot
-			assertThat(!doc.nextSibling().isPresent());
-			assertThat(!doc.previousSibling().isPresent());
-			assertThat(doc.parent().isPresent());
+			Transformation.assertThat(!doc.nextSibling().isPresent());
+			Transformation.assertThat(!doc.previousSibling().isPresent());
+			Transformation.assertThat(doc.parent().isPresent());
         }
         props = doc.current().props.cssprops;
-		assertThat(props ? props.display == "table" : false);
+		Transformation.assertThat(props ? props.display === "table" : false);
 		// check number of cells in table
-		assertThat(count(doc, BoxFilter.isBlockAndHasNoBlockChildren) == blockCount);
+		Transformation.assertThat(Transformation.count(doc, BoxFilter.isBlockAndHasNoBlockChildren) === blockCount);
 		// unwrap table
 		doc.firstChild();
 		doc.unwrapParent();
@@ -199,14 +212,22 @@ export default class Transformation{
 	}
 
 
+	markupHeading(headingElement:QName){
+		this.doc = this.moveToRange(this.doc, this.currentRange!);
+		this.doc = Transformation.markupHeading(
+			this.doc, 
+			this.currentRange!.size, -1, 
+			headingElement);
+		return this;
+	}
 
     private static markupHeading(
 			doc:BoxTreeWalker,
             blockCount:number,
             indexOfHeading:number,
             headingElement:QName,
-            headerElement:QName) {
-		assertThat(doc.current().isBlockAndHasNoBlockChildren());
+            headerElement?:QName) {
+		Transformation.assertThat(doc.current().isBlockAndHasNoBlockChildren());
 		if (indexOfHeading >= 0) {
 			doc = Transformation.moveNBlocks(doc, indexOfHeading);
 			// move to parent block if no siblings
@@ -238,7 +259,7 @@ export default class Transformation{
 		if (indexOfHeading >= 0 && headerElement != null) {
 			doc = Transformation.moveNBlocks(doc, - indexOfHeading);
 			// find ancestor that contains the specified number of blocks, or create it
-			assertThat(blockCount > 1);
+			Transformation.assertThat(blockCount > 1);
 			doc = Transformation.wrapIfNeeded(doc, blockCount);
 			// rename to header
 			doc.renameCurrent(headerElement);
@@ -246,7 +267,7 @@ export default class Transformation{
 			let header = doc.subTree();
 			header.firstDescendant(BoxFilter.isBlockAndHasNoBlockChildren);
 			do {
-				if (indexOfHeading-- != 0) {
+				if (indexOfHeading-- !== 0) {
 					let name = header.current().getName();
                     if (name && (Transformation.H1.equals(name) 
                             || Transformation.H2.equals(name) 
@@ -261,13 +282,19 @@ export default class Transformation{
 		return doc;
 	}
 
+	removeImage() {
+		this.doc = this.moveToRange(this.doc, this.currentRange);
+		this.doc = Transformation.removeImage(this.doc, this.currentRange.size);
+		return this;
+	}
+
 	private static removeImage(
 			doc:BoxTreeWalker, 
 			size:number) {
-        assertThat(size == 1);
+        Transformation.assertThat(size === 1);
         let name = doc.current().getName();
-		assertThat(name ? Transformation.IMG.equals(name) : false);
-		assertThat(doc.current().isReplacedElement());
+		Transformation.assertThat(name ? Transformation.IMG.equals(name) : false);
+		Transformation.assertThat(doc.current().isReplacedElement());
 		doc.markCurrentForRemoval();
 		// also remove parent elements that have no other content than the img
 		while (!doc.previousSibling().isPresent()
@@ -283,7 +310,7 @@ export default class Transformation{
             listElement:QName,
             listAttributes:Map<QName,string>,
             listItemElement:QName){
-		assertThat(doc.current().isBlockAndHasNoBlockChildren());
+		Transformation.assertThat(doc.current().isBlockAndHasNoBlockChildren());
 		// find ancestor that contains the specified number of blocks, or create it
 		doc = Transformation.wrapIfNeeded(doc, blockCount);
 		// rename to list or wrap with new list element
@@ -313,42 +340,42 @@ export default class Transformation{
 	private static transformNavList(
 			doc:BoxTreeWalker, 
 			blockCount:number) {
-		assertThat(doc.current().isBlockAndHasNoBlockChildren());
+		Transformation.assertThat(doc.current().isBlockAndHasNoBlockChildren());
 		// find root list element
 		let listBlockCount = 1;
 		while (true) {
 			let tmp = doc.clone();
 			if (!tmp.previousSibling().isPresent()
                     && tmp.parent().isPresent()
-                    && (listBlockCount = count(tmp, BoxFilter.isBlockAndHasNoBlockChildren)) <= blockCount) {
+                    && (listBlockCount = Transformation.count(tmp, BoxFilter.isBlockAndHasNoBlockChildren)) <= blockCount) {
                 doc = tmp;
                 let name = doc.current().getName();
-				if (listBlockCount == blockCount && (name ? Transformation.OL.equals(name) : false))
+				if (listBlockCount === blockCount && (name ? Transformation.OL.equals(name) : false))
 					break;
 			} else
-				assertThat(false);
+				Transformation.assertThat(false);
         }
         // process items
         let apply = ((ol:BoxTreeWalker) => {
-            assertThat(ol.firstChild().isPresent());
+            Transformation.assertThat(ol.firstChild().isPresent());
             do {
                 let name  = ol.current().getName();
-                assertThat(name ? Transformation.LI.equals(name) : false);
-                assertThat(ol.firstChild().isPresent());
+                Transformation.assertThat(name ? Transformation.LI.equals(name) : false);
+                Transformation.assertThat(ol.firstChild().isPresent());
                 let childCount = 1;
                 while (ol.nextSibling().isPresent()) childCount++;
                 name  = ol.current().getName();
-                if (childCount == 1 &&  (name ? Transformation.A.equals(name) : false) && ol.current().getAttributes().has(Transformation.HREF)) {
+                if (childCount === 1 &&  (name ? Transformation.A.equals(name) : false) && ol.current().getAttributes().has(Transformation.HREF)) {
                     ol.parent();
                     continue;
                 }
                 name  = ol.current().getName();
                 if (name ? Transformation.OL.equals(name) : false) {
-                    if (childCount == 1)
-                        assertThat(false);
+                    if (childCount === 1)
+                        Transformation.assertThat(false);
                     // process nested list
                     ol = apply(ol);
-                    if (childCount == 2) {
+                    if (childCount === 2) {
                         ol.previousSibling();
                         name  = ol.current().getName();
                         if ((name ? Transformation.A.equals(name) : false) && ol.current().getAttributes().has(Transformation.HREF)) {
@@ -374,11 +401,11 @@ export default class Transformation{
                         return (name ? Transformation.A.equals(name) : false) && (b ? b.getAttributes().has(Transformation.HREF) : false) ;
                     };
                 if (!span.firstDescendant(isAWithHref).isPresent())
-                    if (childCount == 2) {
+                    if (childCount === 2) {
                         ol.parent();
                         continue;
                     } else
-                        assertThat(false);
+                        Transformation.assertThat(false);
                 let a = span.current();
                 let href = a.getAttributes().get(Transformation.HREF);
                 // remove this a and all other a with the same href
@@ -414,7 +441,7 @@ export default class Transformation{
 			blockCount:number,
 			preContentBlockCount:number,
 			wrapper:QName) {
-		assertThat(doc.current().isBlockAndHasNoBlockChildren());
+		Transformation.assertThat(doc.current().isBlockAndHasNoBlockChildren());
 		doc = Transformation.moveNBlocks(doc, preContentBlockCount);
 		// find list element
 		let listBlockCount = 1;
@@ -422,16 +449,16 @@ export default class Transformation{
 			let tmp = doc.clone();
 			if (!tmp.previousSibling().isPresent()
 			    	&& tmp.parent().isPresent()) {
-				listBlockCount = count(tmp, BoxFilter.isBlockAndHasNoBlockChildren);
+				listBlockCount = Transformation.count(tmp, BoxFilter.isBlockAndHasNoBlockChildren);
 				if(listBlockCount <= (blockCount - preContentBlockCount)){
 					doc = tmp;
 					let name = doc.current().getName();
-					if (listBlockCount == (blockCount - preContentBlockCount)
+					if (listBlockCount === (blockCount - preContentBlockCount)
 							&& (name ? Transformation.OL.equals(name) || Transformation.UL.equals(name) : false))
 						break;
 				} 
 			} else
-				assertThat(false);
+				Transformation.assertThat(false);
 		}
 		let listHasNextSibling = doc.nextSibling().isPresent();
 		if (listHasNextSibling)
@@ -441,10 +468,10 @@ export default class Transformation{
 		if (preContentBlockCount > 0) {
 			while (doc.previousSibling().isPresent()) {
 				childrenCount++;
-				preContentBlockCount -= count(doc, BoxFilter.isBlockAndHasNoBlockChildren);
+				preContentBlockCount -= Transformation.count(doc, BoxFilter.isBlockAndHasNoBlockChildren);
 				if (preContentBlockCount <= 0) break;
 			}
-			assertThat(preContentBlockCount == 0);
+			Transformation.assertThat(preContentBlockCount === 0);
 		}
 		let preContentHasPreviousSibling = doc.previousSibling().isPresent();
 		if (preContentHasPreviousSibling) {
@@ -455,7 +482,7 @@ export default class Transformation{
 			doc.wrapFirstChildren(childrenCount, wrapper);
 			doc.firstChild();
 		} else {
-			assertThat(doc.parent().isPresent());
+			Transformation.assertThat(doc.parent().isPresent());
 			let name = doc.current().getName();
 			if (!(name ? wrapper.equals(name) : false))
 				if (name ? Transformation.DIV.equals(name) : false)
@@ -483,8 +510,8 @@ export default class Transformation{
 			blockCount:number,
 			captionBlockCount:number,
 			captionBefore:boolean) {
-		assertThat(doc.current().isBlockAndHasNoBlockChildren());
-		assertThat(blockCount > captionBlockCount);
+		Transformation.assertThat(doc.current().isBlockAndHasNoBlockChildren());
+		Transformation.assertThat(blockCount > captionBlockCount);
 		if (captionBlockCount > 0) {
 			if (!captionBefore)
 				doc = Transformation.moveNBlocks(doc, blockCount - captionBlockCount);
@@ -500,7 +527,7 @@ export default class Transformation{
 		}
 		doc = Transformation.wrapIfNeeded(doc, blockCount);
 		doc.renameCurrent(Transformation.FIGURE);
-		if (blockCount - captionBlockCount == 1 && captionBlockCount != 0) {
+		if (blockCount - captionBlockCount === 1 && captionBlockCount != 0) {
 			doc.firstChild();
 			doc.nextSibling();
 			let name = doc.current().getName();
@@ -513,16 +540,16 @@ export default class Transformation{
 	private static removeHiddenBox(
 			doc:BoxTreeWalker,
 			size:number){
-		assertThat(doc.current().isBlockAndHasNoBlockChildren());
-		assertThat(size == 1);
+		Transformation.assertThat(doc.current().isBlockAndHasNoBlockChildren());
+		Transformation.assertThat(size === 1);
 		let cssprops = doc.current().props.cssprops;
-		assertThat( cssprops ? "hidden" === cssprops.visibility : false);
+		Transformation.assertThat( cssprops ? "hidden" === cssprops.visibility : false);
 		// check that all contained boxes inherit visibility
 		let box = doc.subTree();
 		
 		while (box.firstChild().isPresent() || box.firstFollowing().isPresent()){
 			cssprops = box.current().props.cssprops;
-			assertThat(cssprops ? "hidden" === cssprops.visibility : false);
+			Transformation.assertThat(cssprops ? "hidden" === cssprops.visibility : false);
 		}
 			
 		// remove
@@ -543,8 +570,8 @@ export default class Transformation{
 	private static markupPageBreak(
 			doc:BoxTreeWalker,
 	        size:number){
-		assertThat(doc.current().isBlockAndHasNoBlockChildren());
-		assertThat(size == 1);
+		Transformation.assertThat(doc.current().isBlockAndHasNoBlockChildren());
+		Transformation.assertThat(size === 1);
 		doc.renameCurrent(Transformation.DIV, Transformation.EPUB_TYPE_PAGEBREAK);
 		return doc;
 	}
@@ -632,7 +659,7 @@ export default class Transformation{
 	/* Manipulate the tree so that on return current box contains exactly the specified blocks. If
 	 * needed, insert a new anonymous box. */
 	private static wrapIfNeeded(doc:BoxTreeWalker, blockCount:number) {
-		assertThat(doc.current().isBlockAndHasNoBlockChildren());
+		Transformation.assertThat(doc.current().isBlockAndHasNoBlockChildren());
 		// find box that contains exactly the specified blocks, or if it doesn't exist find the first child box
 		let firstBoxBlockCount = 1;
 		while (true) {
@@ -640,7 +667,7 @@ export default class Transformation{
 			if (tmp.previousSibling().isPresent())
 				break;
 			if (tmp.parent().isPresent()) {
-				let k = count(tmp, BoxFilter.isBlockAndHasNoBlockChildren);
+				let k = Transformation.count(tmp, BoxFilter.isBlockAndHasNoBlockChildren);
 				if (k <= blockCount) {
 					doc = tmp;
 					firstBoxBlockCount = k;
@@ -649,17 +676,17 @@ export default class Transformation{
 			} else
 					break;
 		}
-		if (blockCount == firstBoxBlockCount)
+		if (blockCount === firstBoxBlockCount)
 			return doc;
 		blockCount -= firstBoxBlockCount;
 		// find other child boxes
 		let boxCount = 1;
 		while (blockCount > 0) {
-			assertThat(doc.nextSibling().isPresent());
-			blockCount -= count(doc, BoxFilter.isBlockAndHasNoBlockChildren);
+			Transformation.assertThat(doc.nextSibling().isPresent());
+			blockCount -= Transformation.count(doc, BoxFilter.isBlockAndHasNoBlockChildren);
 			boxCount++;
 		}
-		assertThat(blockCount == 0);
+		Transformation.assertThat(blockCount === 0);
 		for (let k = boxCount; k > 1; k--) doc.previousSibling();
 		// wrap inside anonymous box
 		if (doc.previousSibling().isPresent()) {

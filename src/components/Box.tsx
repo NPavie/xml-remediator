@@ -190,6 +190,8 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 				else this._isBlockAndHasNoBlockChildren = true;
 			}
 		}
+		// console.log(this);
+		// console.log(this._isBlockAndHasNoBlockChildren);
 		return this._isBlockAndHasNoBlockChildren;
 		
 	}

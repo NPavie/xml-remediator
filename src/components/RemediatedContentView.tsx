@@ -1,10 +1,12 @@
 import React, { Fragment } from "react";
-import Transformation from "./Transformation";
+import Transformation, { InputRange } from "./Transformation";
 import { Box, BoxRenderMode, BoxType } from './Box';
+import BoxTreeWalker from './BoxTreeWalker';
 
 import "./RemediatedContentView.css";
 
 import "../css/html5-semantic-classes.css";
+import BoxRemediation from "./BoxRemediation";
 
 
 /**
@@ -13,7 +15,7 @@ import "../css/html5-semantic-classes.css";
 interface RemediatedContentViewProperties{
     selectionCallback?:(selected_key:string)=>void,
     displayed_root:Box,
-    transformations_stack:Array<Transformation>,
+    remediations_stack:Array<{range:InputRange,remediation:BoxRemediation}>,
     css_stylesheet?:string
 
 }
@@ -106,16 +108,16 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
             if(in_rows[in_count].key === out_rows[out_count].key){
                 rows.push(
                     <tr key={`doc_leaf_${line_key}`}>
-                        <td key={`doc_leaf_${line_key}_in`}>{in_rows[in_count].computeIsolatedReactNode({
-                            rendering_start_path:'/html[0]/body[0]',
-                            use_semantic_css:true,
-                            hovering_path:hovered_key, 
-                            onMouseEnterCallback:this.isHoveringBox,
-                            onMouseLeaveCallback:this.isLeavingBox
+                        <td key={`doc_leaf_${line_key}_in`}>{out_rows[in_count].computeIsolatedReactNode({
+                                rendering_start_path:'/html[0]/body[0]',
+                                use_semantic_css:true,
+                                hovering_path:hovered_key, 
+                                onMouseEnterCallback:this.isHoveringBox,
+                                onMouseLeaveCallback:this.isLeavingBox
                             })}</td>
-                        <td key={`doc_leaf_${line_key}_out`}>{out_rows[out_count].computeIsolatedReactNode({
-                            rendering_start_path:'/html[0]/body[0]',
-                            use_semantic_css:true
+                        <td key={`doc_leaf_${line_key}_out`}>{in_rows[out_count].computeIsolatedReactNode({
+                                rendering_start_path:'/html[0]/body[0]',
+                                use_semantic_css:true
                             })}</td>
                     </tr>
                 );
@@ -138,7 +140,6 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
                     // Render an empty node in input and the node for the output
                     rows.push(
                         <tr key={`doc_leaf_${line_key}`}>
-                            <td key={`doc_leaf_${line_key}_in`}/>
                             <td key={`doc_leaf_${line_key}_out`}>{out_rows[out_count].computeIsolatedReactNode({
                                 rendering_start_path:'/html[0]/body[0]',
                                 use_semantic_css:true,
@@ -146,6 +147,7 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
                                 onMouseEnterCallback:this.isHoveringBox,
                                 onMouseLeaveCallback:this.isLeavingBox
                                 })}</td>
+                            <td key={`doc_leaf_${line_key}_in`}/>
                         </tr>);
                     ++out_count;
                     ++line_key;
@@ -155,6 +157,7 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
                     for(let i = in_count, end = key_found; i < end; ++i){
                         rows.push(
                             <tr key={`doc_leaf_${line_key}`}>
+                                <td key={`doc_leaf_${line_key}_out`}/>
                                 <td key={`doc_leaf_${line_key}_in`}>{in_rows[i].computeIsolatedReactNode({
                                     rendering_start_path:'/html[0]/body[0]',
                                     use_semantic_css:true,
@@ -162,7 +165,6 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
                                     onMouseEnterCallback:this.isHoveringBox,
                                     onMouseLeaveCallback:this.isLeavingBox
                                     })}</td>
-                                <td key={`doc_leaf_${line_key}_out`}/>
                             </tr>);
                         ++in_count;
                         ++line_key;
@@ -171,29 +173,39 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
                 }
             } 
         }
-        //console.log(rows);
-        return <Fragment>
-            <section className="transfo-stack" aria-lable="Stack of transformations">
-                <b>Transformations</b>
-            </section>
-            <section className="documents">
-                <table style={{width:"100%"}}>
-                    <thead>
-                        <tr>
-                            <th>Original structure</th>
-                            <th>Remediation result</th>
-                        </tr>
-                    </thead>
-                </table>
-                <section className="scrolltable">
-                    <table style={{width:"100%"}}>
-                        <tbody>
-                            {rows}
-                        </tbody>
-                    </table>
+        
+        let remediation_list = this.props.remediations_stack.map((value:{range:InputRange,remediation:BoxRemediation}) => {
+            return <li> On block {value.range.startBlockIndex} : <br/> 
+                {value.remediation.actions.join(" ").replace('Transformation.','')}</li>;
+        });
+
+        // on the result side, highlights fragment instead of boxes
+        // on boxes hovering, 
+        // check if the box is within a registered range (a range within the remediation stack)
+        // if it is, higlight all the boxes in this range
+        return (
+            <Fragment>
+                <section key="transfo_stack" className="transfo-stack" aria-label="Stack of transformations">
+                    <header className="transfo-stack__head">Actions done</header>
+                    <ul className="transfo-stack__list">{remediation_list}</ul>
                 </section>
-            </section>
-            
-        </Fragment>;
+                <section key="documents" className="documents">
+                    <table style={{width:"100%"}}>
+                        <thead>
+                            <tr>
+                                <th>Remediation result</th>
+                                <th>Original structure</th>
+                            </tr>
+                        </thead>
+                    </table>
+                    <section className="scrolltable">
+                        <table style={{width:"100%"}}>
+                            <tbody>
+                                {rows}
+                            </tbody>
+                        </table>
+                    </section>
+                </section>
+            </Fragment>);
     }
 }

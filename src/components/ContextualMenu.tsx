@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box } from './Box';
+import { Box, BoxType } from './Box';
 import Attribute from './Attribute';
 
 

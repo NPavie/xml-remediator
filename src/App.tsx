@@ -1,26 +1,10 @@
 import React from 'react';
 import './App.css';
 
-import { FileInput } from './components/FileInput';
-//import ContentView from './components/ContentView';
-
-
 // react-toastify for notifications
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-/*
-import AceEditor from 'react-ace';
-import 'brace/mode/javascript';
-import 'brace/mode/xml';
-import 'brace/mode/html';
-import 'brace/mode/css';
-import 'brace/mode/text';
-import 'brace/mode/plain_text';
-
-import 'brace/theme/github';
-import 'brace/theme/monokai';
-*/
 
 import DOMRemediation from './components/DOMRemediation';
 //import RemediationView from './components/RemediationView';
@@ -31,6 +15,8 @@ import BoxTreeWalker from './components/BoxTreeWalker';
 import ContextualMenu from './components/ContextualMenu';
 import BoxTreeView from './components/BoxTreeView';
 import RemediatedContentView from "./components/RemediatedContentView";
+import Transformation, { InputRange } from './components/Transformation';
+import BoxRemediation from './components/BoxRemediation';
 
 /**
  * Hash of available ace modes per extension
@@ -92,27 +78,44 @@ export default class App extends React.Component {
 
     state = {
         renderer_mode:BoxRenderMode.SEMANTIC,
-        input_viewer_css: ["App-input-viewer", "show"],
-        drawer_button_css: ["App-button"],
-        output_viewer_css: ["App-output-viewer", "with-drawer"],
-        remediations_css:["App-remediation"],
-        editor_width: "auto",
-        input_file: "",
-        input_content: "",
-        output_content: "",
+        //input_viewer_css: ["App-input-viewer", "show"],
+        //drawer_button_css: ["App-button"],
+        //output_viewer_css: ["App-output-viewer", "with-drawer"],
+        //remediations_css:["App-remediation"],
+        //editor_width: "auto",
+        //input_file: "",
+        //input_content: "",
+        //output_content: "",
         hovered_key:"",
-        applicable_remediations: new Array<DOMRemediation>(),
-        applied_remediations_stack: new Array<DOMRemediation>(),
+        //applicable_remediations: new Array<DOMRemediation>(),
+        //applied_remediations_stack: new Array<DOMRemediation>(),
         root_box:Box.parse(JSON.stringify(test_document))
     };
 
-    
+    private doc:BoxTreeWalker;
 
     constructor(props: any) {
         super(props);
         this.editorViewSelector = React.createRef();
         this.selectEditorMode = this.selectEditorMode.bind(this);
         this.onNodeHovering = this.onNodeHovering.bind(this);
+        this.doc = new BoxTreeWalker(this.state.root_box);
+        
+        let  transformed_root = new Transformation(this.doc.root());
+        try{
+            let remediation_1 = new BoxRemediation("transformTable(true)", "markupHeading(Transformation.H1)");
+            let res = remediation_1.applyOn(this.state.root_box,new InputRange(0,3));
+
+            let remediation_2 = new BoxRemediation("removeImage()");
+            res = remediation_2.applyOn(this.state.root_box,new InputRange(1,0,1));
+            console.log(res);
+        } catch (err){
+
+            console.log(err);
+        }
+
+        
+        
     }
     
     editorViewSelector:any;
@@ -127,7 +130,7 @@ export default class App extends React.Component {
     }
 
     loadingToastId: React.ReactText = "";
-    
+    /*
     undoLastRemediation(){
         let stack = this.state.applied_remediations_stack;
         stack.pop();
@@ -156,7 +159,7 @@ export default class App extends React.Component {
             applied_remediations_stack:new_remediations_stack,
             output_content:currentContent
         });
-    }
+    }*/
 
     onNodeHovering(key:string,is_hovered:boolean){
         if(is_hovered){
@@ -184,7 +187,17 @@ export default class App extends React.Component {
             render_mode:this.state.renderer_mode
         });
 
-        
+        let testingstack = new Array<{range:InputRange,remediation:BoxRemediation}>();
+        testingstack.push({
+            range:new InputRange(0,3),
+            remediation:new BoxRemediation("transformTable(true)", "markupHeading(Transformation.H1)")
+        });
+
+        testingstack.push({
+            range:new InputRange(1,0,1),
+            remediation:new BoxRemediation("removeImage()")
+        });
+
         return (
             <div className="App">
                 <ToastContainer />
@@ -198,7 +211,7 @@ export default class App extends React.Component {
                 <main className="App-frame">
                     <RemediatedContentView 
                         displayed_root={rootBox}
-                        transformations_stack={[]}
+                        remediations_stack={testingstack}
                         />
                 </main>
                 

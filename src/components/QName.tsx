@@ -32,9 +32,9 @@ export default class QName{
 
     equals(name:QName){
         return (
-            name.namespace == this.namespace 
-                && name.localPart == this.localPart 
-                && name.prefix == this.prefix);
+            name.namespace === this.namespace 
+                && name.localPart === this.localPart 
+                && name.prefix === this.prefix);
     }
 
 }

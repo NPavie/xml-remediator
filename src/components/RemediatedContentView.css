@@ -3,6 +3,15 @@
     width: 19%;
   }
 
+.transfo-stack__head{
+    text-align: center;
+    font-weight: bold;
+}
+
+.transfo-stack__list{
+    text-align: left;
+}
+
 .documents{
     float: right;
     width: 80%;
