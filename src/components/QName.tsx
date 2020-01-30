@@ -30,11 +30,26 @@ export default class QName{
 	    this.prefix = from.prefix;
     }
 
+    /**
+     * check object equality based on properties
+     * @param name 
+     */
     equals(name:QName){
         return (
             name.namespace === this.namespace 
                 && name.localPart === this.localPart 
                 && name.prefix === this.prefix);
+    }
+
+    /**
+     * To string function (automatically called in console.log function on object)
+     */
+    toString(){
+        let str:string = "";
+        if(this.prefix) str = `${this.prefix}:`
+        if(this.namespace) str += `{${this.namespace}}/`;
+        str += this.localPart;
+        return str;
     }
 
 }

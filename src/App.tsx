@@ -5,18 +5,12 @@ import './App.css';
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-
-import DOMRemediation from './components/DOMRemediation';
-//import RemediationView from './components/RemediationView';
-
-import test_document from "./temp/document.json";
-import { Box, BoxRenderMode, BoxType } from './components/Box';
+import test_document from "./_tests/resources/document.json";
+import { Box, BoxRenderMode } from './components/Box';
 import BoxTreeWalker from './components/BoxTreeWalker';
-import ContextualMenu from './components/ContextualMenu';
-import BoxTreeView from './components/BoxTreeView';
 import RemediatedContentView from "./components/RemediatedContentView";
-import Transformation, { InputRange } from './components/Transformation';
 import BoxRemediation from './components/BoxRemediation';
+import BoxFragment from './components/BoxFragment';
 
 /**
  * Hash of available ace modes per extension
@@ -32,46 +26,7 @@ const ace_mode_for_extension: { [key: string]: string } = {
     "txt": "plain_text"
 };
 
-/**
- * Retrieve the Ace mode from file extension.
- * If no mode is avaible, the plain_text mode is used
- * @param {string} filepath path or name of the file to visualise with ace
- */
-function getMode(filepath: string) {
-    let temp = filepath.split('.');
-    if (temp.length > 1) {
-        let mode = ace_mode_for_extension[temp.pop()!];
-        return mode !== undefined ? mode : ace_mode_for_extension["txt"];
-    } else {
-        return ace_mode_for_extension["txt"];
-    }
-}
 
-
-/**
- * Hash of the used mimetype per extension
- */
-const mimetypeMap: { [key: string]: string } = {
-    "png": "image/png",
-    "jpe": "image/jpeg",
-    "jpg": "image/jpeg",
-    "jpeg": "image/jpeg",
-    "gif": "image/gif",
-    "svg": "image/svg+xml",
-    "xhtml": "application/xhtml+xml",
-    "xml": "text/xml",
-    "html" : "text/html",
-    "txt":"text/plain"
-};
-function getMimetypeAs<T>(filepath:string):T{
-    let temp = filepath.split('.');
-    if (temp.length > 1) {
-        let mimetype = mimetypeMap[temp.pop()!];
-        return mimetype !== undefined ? mimetype as unknown as T : mimetypeMap["txt"] as unknown as T;
-    } else {
-        return mimetypeMap["txt"] as unknown as T;
-    }
-}
 
 
 export default class App extends React.Component {
@@ -89,30 +44,38 @@ export default class App extends React.Component {
         hovered_key:"",
         //applicable_remediations: new Array<DOMRemediation>(),
         //applied_remediations_stack: new Array<DOMRemediation>(),
-        root_box:Box.parse(JSON.stringify(test_document))
+        root_box:Box.parse(JSON.stringify(test_document)),
+        remediation_stack:new Array<{range:BoxFragment,remediation:BoxRemediation}>()
     };
 
-    private doc:BoxTreeWalker;
+    
 
     constructor(props: any) {
         super(props);
         this.editorViewSelector = React.createRef();
         this.selectEditorMode = this.selectEditorMode.bind(this);
         this.onNodeHovering = this.onNodeHovering.bind(this);
-        this.doc = new BoxTreeWalker(this.state.root_box);
         
-        let  transformed_root = new Transformation(this.doc.root());
-        try{
-            let remediation_1 = new BoxRemediation("transformTable(true)", "markupHeading(Transformation.H1)");
-            let res = remediation_1.applyOn(this.state.root_box,new InputRange(0,3));
+        
+        this.state.remediation_stack.push({
+            range:new BoxFragment({block:0},3),
+            remediation:new BoxRemediation({actions:["transformTable(true)", "markupHeading(Transformer.H1)"]})
+        });
 
-            let remediation_2 = new BoxRemediation("removeImage()");
-            res = remediation_2.applyOn(this.state.root_box,new InputRange(1,0,1));
+        /*
+        let  transformed_root = new Transformer(this.doc.root());
+        try{
+            let remediation_1 = new BoxRemediation({actions:["transformTable(true)", "markupHeading(Transformer.H1)"]});
+            let res = remediation_1.applyOn(this.state.root_box,new BoxFragment(0,undefined,3));
+
+            // let remediation_2 = new BoxRemediation("removeImage()");
+            // res = remediation_2.applyOn(this.state.root_box,new BoxFragment(1,0,1));
+            console.log("Remediation result : ");
             console.log(res);
         } catch (err){
-
+            console.log("Error during remediation : ")
             console.log(err);
-        }
+        }*/
 
         
         
@@ -172,31 +135,19 @@ export default class App extends React.Component {
 
 
     render() {
-        // var switchingView: String =
-        //     this.state.raw_mode === true ?
-        //         "Switch to text viewer" :
-        //         "Switch to tree viewer";
-
-        let rootBox = new Box({
-            hovered_key:this.state.hovered_key,
-            attributes:this.state.root_box.props.attributes,
-            type:this.state.root_box.props.type,
-            name:this.state.root_box.props.name,
-            isReplacedElement:this.state.root_box.props.isReplacedElement,
-            children:this.state.root_box.props.children,
-            render_mode:this.state.renderer_mode
-        });
-
-        let testingstack = new Array<{range:InputRange,remediation:BoxRemediation}>();
+        let testingstack = new Array<{range:BoxFragment,remediation:BoxRemediation}>();
         testingstack.push({
-            range:new InputRange(0,3),
-            remediation:new BoxRemediation("transformTable(true)", "markupHeading(Transformation.H1)")
+            range:new BoxFragment({block:0},3),
+            remediation:new BoxRemediation({actions:["transformTable(true)", "markupHeading(Transformer.H1)"]})
         });
 
+        /*
         testingstack.push({
-            range:new InputRange(1,0,1),
-            remediation:new BoxRemediation("removeImage()")
-        });
+            range:new BoxFragment(1,0,1),
+            remediation:new BoxRemediation({
+                actions:["removeImage()"]})
+        });*/
+
 
         return (
             <div className="App">
@@ -210,8 +161,8 @@ export default class App extends React.Component {
                 </header>
                 <main className="App-frame">
                     <RemediatedContentView 
-                        displayed_root={rootBox}
-                        remediations_stack={testingstack}
+                        displayed_root={this.state.root_box}
+                        remediations_stack={this.state.remediation_stack}
                         />
                 </main>
                 
@@ -300,4 +251,46 @@ export default class App extends React.Component {
                         </div>
                     </div>
                     <ContextualMenu className="App-context_menu"/>
-*/
+
+/**
+ * Retrieve the Ace mode from file extension.
+ * If no mode is avaible, the plain_text mode is used
+ * @param {string} filepath path or name of the file to visualise with ace
+ *
+function getMode(filepath: string) {
+    let temp = filepath.split('.');
+    if (temp.length > 1) {
+        let mode = ace_mode_for_extension[temp.pop()!];
+        return mode !== undefined ? mode : ace_mode_for_extension["txt"];
+    } else {
+        return ace_mode_for_extension["txt"];
+    }
+}
+
+
+/**
+ * Hash of the used mimetype per extension
+ *
+const mimetypeMap: { [key: string]: string } = {
+    "png": "image/png",
+    "jpe": "image/jpeg",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "svg": "image/svg+xml",
+    "xhtml": "application/xhtml+xml",
+    "xml": "text/xml",
+    "html" : "text/html",
+    "txt":"text/plain"
+};
+function getMimetypeAs<T>(filepath:string):T{
+    let temp = filepath.split('.');
+    if (temp.length > 1) {
+        let mimetype = mimetypeMap[temp.pop()!];
+        return mimetype !== undefined ? mimetype as unknown as T : mimetypeMap["txt"] as unknown as T;
+    } else {
+        return mimetypeMap["txt"] as unknown as T;
+    }
+}
+
+                    */

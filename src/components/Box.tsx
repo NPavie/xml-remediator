@@ -91,8 +91,7 @@ export interface BoxInterface {
  */
 export class Box extends React.Component<BoxInterface, BoxState> {
     
-	public childrenList:ListIterable<Box>;
-	
+	public childrenList:ListIterable<Box>;	
 	public key:string = "";
 	public rendering:Rendering = Rendering.DEFAULT;
 
@@ -113,6 +112,23 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		};
 	}
 
+	public static AnonymousBlockBox(children:Array<Box>){
+		return new Box({
+			type:BoxType.BLOCK,
+			attributes:[],
+			isReplacedElement:true,
+			children:children
+		})
+	}
+
+	public static AnonymousInlineBox(children:Array<Box>){
+		return new Box({
+			type:BoxType.INLINE,
+			attributes:[],
+			isReplacedElement:true,
+			children:children
+		})
+	}
 
 	//// BOX STRUCTURE
 
@@ -120,10 +136,13 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		return this.childrenList[Symbol.iterator]() as ListIterator<Box>;
 	}
 
-	protected copyProps(){
+	/**
+	 * Prepare a BoxInterface copy of the current box, with empty children and attributes
+	 */
+	protected preparePropsCopy():BoxInterface{
 		return {
-			attributes:this.props.attributes.slice(0),
-			children:this.props.children.slice(0),
+			attributes:new Array<Attribute>(),
+			children:new Array<Box>(),
 			type:this.props.type,
 			name:this.props.name,
 			text:this.props.text,
@@ -138,45 +157,69 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		} as BoxInterface;
 	}
 
-	public copy(args ?: {name?:QName, attributes?:Map<QName,string>, children?:ListIterator<Box>|Array<Box>, rendering?:Rendering}):Box{
-		// create a props copy
-		let newProps:BoxInterface = this.copyProps();
-		if(args && args.name) newProps.name = args.name;
-		if(args && args.attributes){
-			let attrArray = new Array<Attribute>();
-			args.attributes.forEach((val:string,key:QName)=>{
-				attrArray.push({name:key, value:val} as Attribute);
+	public copy(
+			with_new: {
+				name?:QName, 
+				attributes?:Map<QName,string>, 
+				children?:ListIterator<Box>|Array<Box>, 
+				rendering?:Rendering,
+				// for key propagation
+				parent_key?:string, 
+				parent_index?:number
+			} = { /* default with empty new_props */ }
+	):Box{
+		// create a basic props copy with no children or attributes (empty arrays)
+		let new_props:BoxInterface = this.preparePropsCopy();
+		let current_key = this.key;
+		let keys = this.key.split('/');
+		// just in case
+		new_props.parent_index = Number.parseInt(keys[keys.length - 1].split('[')[1].split(']')[0]);
+		new_props.parent_key = keys.slice(0,keys.length - 1).join('/');
+
+		if(with_new.name != null) { // renaming the node if requested
+			new_props.name = with_new.name;
+			current_key = `${new_props.parent_key}/${new_props.name.localPart}[${new_props.parent_index}]`;
+		}
+		if(with_new.parent_key != null){
+			new_props.parent_key = with_new.parent_key;
+		}
+		if(with_new.parent_index != null){
+			new_props.parent_index = with_new.parent_index;
+		}
+
+		if(with_new.attributes != null){ // stash new attributes
+			new_props.attributes = new Array<Attribute>();
+			with_new.attributes.forEach((val:string,key:QName)=>{
+				new_props.attributes.push({name:key, value:val} as Attribute);
 			});
-			newProps.attributes = attrArray;
+		} else { // copy of the attributes
+			this.props.attributes.forEach((attr:Attribute) => {
+				new_props.attributes.push(attr);
+			});
 		}
-		if(args && args.children && args.children instanceof Array){
-			newProps.children = args.children.slice(0);
+		// select the iterator to copy the children from
+		let children_to_copy = with_new.children != null ? with_new.children : this.children;
+		let i = 0;
+		for(let child of children_to_copy){
+			let copy = child.copy();
+			copy.updateKeys(current_key,i);
+			new_props.children.push(copy);
+			++i;
 		}
-		let newBox = new Box(newProps);
 		
-		if(args && args.children && args.children instanceof ListIterator){
-			newBox.childrenList = new ListIterable<Box>(args.children);
-		} else {
-			newBox.childrenList = new ListIterable<Box>(this.childrenList[Symbol.iterator]() as ListIterator<Box>);
-		}
-		
-		newBox.rendering = (args && args.rendering) ? args.rendering : this.rendering;
-		newBox.key = this.key;
-		
-		//newBox.key = this.key + "-copy";
+		let newBox = new Box(new_props);
+		newBox.rendering = (with_new.rendering) ? with_new.rendering : this.rendering;
+		newBox._hasText = this._hasText;
+		newBox._isBlockAndHasNoBlockChildren = this._isBlockAndHasNoBlockChildren;
 		// update children keys
-		//for(let i = 0, end = newBox.props.children.length; i<end; ++i){
-		//	newBox.props.children[i].updateKeys(newBox.key);
+		//i = 0;
+		//for(let child of newBox.children){
+		//	//console.log(child);
+		//	child.updateKeys(newBox.key,i);
+		//	i++;
 		//}
 		return newBox;
-	}
-
-	
-//	get children():ListIterator<Box>{
-//		return this.childrenIterable[Symbol.iterator]() as ListIterator<Box>;
-//	}
-
-	
+	}	
 
 	private _isBlockAndHasNoBlockChildren?:boolean;
 	isBlockAndHasNoBlockChildren():boolean {
@@ -227,14 +270,14 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		return this.attributes;
 	}
 
-
-
-	withName(name:QName) {
-		let newBoxProps:BoxInterface = this.props;
-		newBoxProps.name = name;
-		var newBox = new Box(newBoxProps);
-		Object.freeze(newBox);
-		return newBox;
+	/**
+	 
+	 * @param name 
+	 */
+	withName(name:QName | undefined) {
+		
+		//Object.freeze(newBox);
+		return this.copy({name:name});;
 	}
 
 	withChildren(children:Array<Box> | ListIterator<Box>) {
@@ -257,7 +300,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 				if (c.props.type === BoxType.BLOCK)
 					throw new IllegalArgumentException("no block inside inline");
 		}
-		Object.freeze(newBox);
+		//Object.freeze(newBox);
 		return newBox;
 	}
 
@@ -278,8 +321,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 			use_semantic_css?:boolean, 
 			hovering_path?:string, 
 			selection_path?:string
-		}):string 
-	{
+	}):string {
 		if (this.key.startsWith(args.rendering_start_path)){ // Node to render
 			// render block and its children
 			if(this.props.name){
@@ -335,8 +377,16 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 				// Content of the node and node end
 				let content = "";
 				let node_end = "";
-				if(this.props.children.length > 0){
+				if(!this.childrenList.isEmpty()){
 					content = ">\n";
+					for(let child of this.children){
+						content += child.computeHtml({
+							rendering_start_path:args.rendering_start_path,
+							hovering_path:args.hovering_path,
+							selection_path:args.selection_path,
+							use_semantic_css:args.use_semantic_css}
+						);
+					}/*
 					for(let i = 0, end = this.props.children.length; i < end; i++){
 						content += this.props.children[i].computeHtml({
 								rendering_start_path:args.rendering_start_path,
@@ -344,7 +394,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 								selection_path:args.selection_path,
 								use_semantic_css:args.use_semantic_css}
 							);
-					}
+					}*/
 					node_end = `</${node_name}>`;
 				} else if(this.props.text){
 					content = ">\n" + this.props.text;
@@ -359,14 +409,23 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 				// use ${cssInlined} for computed css from the original document
 				return `<${node_name} ${attributes.trim()} ${namespaces.trim()}${content}\n${node_end}\n`;
 			} else { // anonymous node (more likely to be textual node)
-				if(this.props.children.length > 0) {
-					return this.props.children.map((b:Box)=>{
-							return b.computeHtml({
-								rendering_start_path:args.rendering_start_path,
-								hovering_path:args.hovering_path,
-								selection_path:args.selection_path,
-								use_semantic_css:args.use_semantic_css});
-						}).join("");
+				if(!this.childrenList.isEmpty()){
+					let content = "";
+					for(let child of this.children){
+						content += child.computeHtml({
+							rendering_start_path:args.rendering_start_path,
+							hovering_path:args.hovering_path,
+							selection_path:args.selection_path,
+							use_semantic_css:args.use_semantic_css});
+					}
+					return content;
+					// return this.props.children.map((b:Box)=>{
+					// 		return b.computeHtml({
+					// 			rendering_start_path:args.rendering_start_path,
+					// 			hovering_path:args.hovering_path,
+					// 			selection_path:args.selection_path,
+					// 			use_semantic_css:args.use_semantic_css});
+					// 	}).join("");
 				} else if(this.props.text) {
 					return this.props.text;
 				} else return "";	
@@ -533,15 +592,16 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 	 * @param rendering_start_path path from which the react rendering start 
 	 * 		(element that are not to be rendered when computing the box)
 	 */
-	computeIsolatedReactNode(args : {
-		rendering_start_path:string,
-		use_semantic_css?:boolean, 
-		hovering_path?:string, 
-		selection_path?:string,
-		onMouseEnterCallback?:(hovered_key:string)=>void,
-		onMouseLeaveCallback?:(hovered_key:string)=>void,
-		onSelectionCallback?:(selected_key:string)=>void
-	}
+	computeIsolatedReactNode(
+			args : {
+				rendering_start_path:string,
+				use_semantic_css?:boolean, 
+				hovering_path?:string, 
+				selection_path?:string,
+				onMouseEnterCallback?:(hovered_key:string)=>void,
+				onMouseLeaveCallback?:(hovered_key:string)=>void,
+				onSelectionCallback?:(selected_key:string)=>void
+			}
 	):React.FunctionComponentElement<{}> | React.DOMElement<any,Element> | ReactElement<{}>{
 		if (this.key.startsWith(args.rendering_start_path)){
 			let tags = this.key.substring(args.rendering_start_path.length).split('/').slice(1);
@@ -576,7 +636,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		// iframe rendering
 		// Create a copy of the children tree
 		let rendered_children = this.props.children.slice(0);
-
+		//console.log(rendered_children);
 		// new css style tag
 		let css = new Box({
 			text:this.props.render_mode == BoxRenderMode.HTML ? html4 : html5_semantic_css,
@@ -636,6 +696,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 
 		// recursively compute the html source as a string
 		let rendered_content = rendered_box.computeHtml({rendering_start_path:'/',hovering_path:this.props.hovered_key}); 
+		
 		//console.log(rendered_content);
 		return (<iframe 
 			title="html_view"
@@ -698,12 +759,17 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 	 * @param index 
 	 */
 	updateKeys(parent_key?:string, index:number = 0){
-		
-		this.key = `${parent_key ? parent_key : ""}/${(this.props.name ? this.props.name.localPart : "text()")}[${index}]`;
-		for(let i = this.props.children.length; i--;){
-			this.props.children[i].updateKeys(this.key, i);
-			//Object.freeze(this.props.children[i]);
+		this.key = `${parent_key != null ? parent_key : ""}/${(this.props.name != null ? this.props.name.localPart : "text()")}[${index}]`;
+		let i = 0
+		for(let child of this.children){
+			child.updateKeys(this.key, i);
+			i++
 		}
+
+		//for(let i = this.props.children.length; i--;){
+		//	this.props.children[i].updateKeys(this.key, i);
+		//	//Object.freeze(this.props.children[i]);
+		//}
 	}
 
 	static parse(jsonString:string){
@@ -730,5 +796,15 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		box.updateKeys("");
 		//Object.freeze(box);
 		return box;
+	}
+
+	getKeys(existing_keys?:Array<string>){
+		let keys_array = existing_keys != null ? existing_keys : new Array<string>();
+		keys_array.push(this.key);
+		//console.log(this.children);
+		for(let child of this.children){
+			keys_array = child.getKeys(keys_array);
+		}
+		return keys_array;
 	}
 }
