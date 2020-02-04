@@ -45,7 +45,7 @@ export default class App extends React.Component {
         //applicable_remediations: new Array<DOMRemediation>(),
         //applied_remediations_stack: new Array<DOMRemediation>(),
         root_box:Box.parse(JSON.stringify(test_document)),
-        remediation_stack:new Array<{range:BoxFragment,remediation:BoxRemediation}>()
+        remediation_stack:new Array<{range:BoxFragment,remediation:BoxRemediation,activated:boolean}>()
     };
 
     
@@ -59,8 +59,15 @@ export default class App extends React.Component {
         
         this.state.remediation_stack.push({
             range:new BoxFragment({block:0},3),
-            remediation:new BoxRemediation({actions:["transformTable(true)", "markupHeading(Transformer.H1)"]})
+            remediation:new BoxRemediation({actions:["transformTable(true)", "markupHeading(Transformer.H1)"]}),
+            activated:true
         });
+        /*
+        this.state.remediation_stack.push({
+            range:new BoxFragment(1,0,1),
+            remediation:new BoxRemediation({actions:["removeImage()"]}),
+            activated:true
+        });*/
 
         /*
         let  transformed_root = new Transformer(this.doc.root());
@@ -135,20 +142,6 @@ export default class App extends React.Component {
 
 
     render() {
-        let testingstack = new Array<{range:BoxFragment,remediation:BoxRemediation}>();
-        testingstack.push({
-            range:new BoxFragment({block:0},3),
-            remediation:new BoxRemediation({actions:["transformTable(true)", "markupHeading(Transformer.H1)"]})
-        });
-
-        /*
-        testingstack.push({
-            range:new BoxFragment(1,0,1),
-            remediation:new BoxRemediation({
-                actions:["removeImage()"]})
-        });*/
-
-
         return (
             <div className="App">
                 <ToastContainer />

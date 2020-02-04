@@ -94,19 +94,19 @@ export default class Transformer {
 	moveToRange(doc: BoxTreeWalker, fragment: BoxFragment) {
 		Transformer.assertThat(fragment != null);
 		doc.root();
-		let n = fragment.startBlockIndex;
+		let n = fragment.block;
 		if (doc.current().isBlockAndHasNoBlockChildren())
 			Transformer.assertThat(n === 0);
 		else {
 			doc = Transformer.moveNBlocks(doc, n + 1);
-			if (fragment.startInlineIndex >= 0) {
+			if (fragment.inline >= 0) {
 				let isReplacedElementOrTextBox = (b?: Box) => {
 					return b ? (b.hasText() || b.isReplacedElement()) : false;
 				};
 				let c = Transformer.count(doc, isReplacedElementOrTextBox);
-				Transformer.assertThat(fragment.startInlineIndex < c, `${fragment.startInlineIndex} < ${c}`);
+				Transformer.assertThat(fragment.inline < c, `${fragment.inline} < ${c}`);
 				Transformer.assertThat(doc.firstDescendant(BoxFilter.isReplacedElementOrTextBox).isPresent());
-				for (let i = 0; i < fragment.startInlineIndex; ++i) {
+				for (let i = 0; i < fragment.inline; ++i) {
 					Transformer.assertThat(doc.firstFollowing(BoxFilter.isReplacedElementOrTextBox).isPresent());
 				}
 			}
@@ -240,9 +240,10 @@ export default class Transformer {
 		doc.renameCurrent(headingElement);
 		//console.log(doc.root().getKeys());
 		// remove strong, em and small within the heading
-		doc = Transformer.removeEmInAllEmBox(doc, Transformer.STRONG);
-		doc = Transformer.removeEmInAllEmBox(doc, Transformer.EM);
-		doc = Transformer.removeEmInAllEmBox(doc, Transformer.SMALL);
+		// TODO debug
+		//doc = Transformer.removeEmInAllEmBox(doc, Transformer.STRONG);
+		//doc = Transformer.removeEmInAllEmBox(doc, Transformer.EM);
+		//doc = Transformer.removeEmInAllEmBox(doc, Transformer.SMALL);
 		// remove all div and p within the heading
 		
 		// remove all span within the heading
@@ -557,7 +558,7 @@ export default class Transformer {
 	}
 
 
-	static WHITE_SPACE = new RegExp("\\s*").compile();
+	static WHITE_SPACE = new RegExp(/\s/g).compile();
 	/**
 	 * Remove all the em from this box if all text boxes in this box are a descendant of em.
 	 *
@@ -566,29 +567,26 @@ export default class Transformer {
 	private static removeEmInAllEmBox(doc: BoxTreeWalker, emElement: QName) {
 		let box = doc.subTree();
 		let allStrong = true;
-		while (true) {
-			let name = box.current().getName();
-			if (!(name ? emElement.equals(name) : false)) {
-
-				if (box.current().hasText()
-					&& !Transformer.WHITE_SPACE.test(box.current().props.text!)) {
+		let keep_searching = true;
+		while (keep_searching) {
+			if (!emElement.equals(box.current().getName())) {
+				if (box.current().hasText() 
+						&& !Transformer.WHITE_SPACE.test(box.current().props.text!)) {
 					allStrong = false;
-					break;
+					keep_searching = false;
 				}
 				if (box.firstChild().isPresent())
 					continue;
 			}
 			if (box.firstFollowing().isPresent())
 				continue;
-			break;
+			keep_searching = false;
 		}
 		if (allStrong) {
 			box.root();
-			let filter = (b?: Box) => {
-				let name = b ? b.getName() : undefined;
-				return name ? emElement.equals(name) : false;
-			}
-			Transformer.unwrapAll(box, filter);
+			Transformer.unwrapAll(box, (b: Box) => {
+					return emElement.equals(b.getName());
+				});
 		}
 		return doc;
 	}
@@ -608,28 +606,32 @@ export default class Transformer {
 		return count;
 	}
 
-	private static unwrapAll(doc: BoxTreeWalker, select: (b?: Box) => boolean) {
+	/**
+	 * unwrap all elements of the ocument that are filtered by a selector function
+	 * @param doc 
+	 * @param select 
+	 */
+	private static unwrapAll(doc: BoxTreeWalker, select: (b: Box) => boolean) {
 		let subtree = doc.subTree();
-		while (true) {
+		let keep_searching = true;
+		while (keep_searching) {
 			let current = subtree.current();
-			if (select(current))
+			if (select(current)) {
 				if (subtree.firstChild().isPresent()) {
 					subtree.unwrapParent();
 					continue;
 				} else if (subtree.previousSibling().isPresent()) {
 					subtree.unwrapNextSibling();
-					if (subtree.firstFollowing().isPresent())
-						continue;
-					else
-						break;
-				} else if (subtree.parent().isPresent())
+					if (subtree.firstFollowing().isPresent()) continue;
+					else keep_searching = false;
+				} else if (subtree.parent().isPresent()) {
 					subtree.unwrapFirstChild();
-				else
-					break;
-			if (subtree.firstChild().isPresent() || subtree.firstFollowing().isPresent())
-				continue;
-			else
-				break;
+				} else keep_searching = false;
+			} else {
+				// Try to select a child or the next following box in the tree
+				if (subtree.firstChild().isPresent() || subtree.firstFollowing().isPresent()) continue;
+				else keep_searching = false; // end of the boxes list if no child or remaining nodes
+			}
 		}
 		return doc;
 	}
@@ -679,5 +681,19 @@ export default class Transformer {
 		}
 		return doc;
 	}
+
+
+
+	/**
+	 * Retrieve the keys of the elements selected by a BoxFragmenet
+	 * @param doc root box of the document to be 
+	 * @param frag 
+	 */
+	public static getFragmentKeys(doc:Box,frag:BoxFragment){
+		let temp = new BoxTreeWalker(doc);
+
+		
+	}
+	
 
 }

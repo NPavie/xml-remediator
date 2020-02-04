@@ -30,9 +30,9 @@ export default class BoxRemediation extends React.Component<BoxRemediationProper
      */
     applyOn(document:Box, range:BoxFragment):Box{
         let transformation_chain = new Transformer(document)
-            .moveTo(range.startBlockIndex,
+            .moveTo(range.block,
                     range.size,
-                    range.startInlineIndex);
+                    range.inline);
         this.props.actions.forEach((action)=>{
             let action_name = action.split('(')[0];
             let action_parameters = action.split('(')[1].split(')')[0].split(',').map((arg:string) => {return arg.trim()});

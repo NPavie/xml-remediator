@@ -7,6 +7,7 @@ import Optional from './Optional';
 
 import NoSuchElementException from './exceptions/NoSuchElementException';
 import CanNotDoWalkerActionException from './exceptions/CanNotDoWalkerActionException';
+import BoxFragment from './BoxFragment';
 
 
 function deepCopyStack(stack:Array<ListIterator<Box>>) {
@@ -35,17 +36,16 @@ export default class BoxTreeWalker {
 	_root: Box;
 	private _current: Box;
 
-    path: Array<ListIterator<Box>>;
+    public path: Array<ListIterator<Box>>;
 	
 	private static noSuchElement = Optional.empty<Box>();
+	static assertThat(test:boolean,message?:string) {
+		if (!test) throw new CanNotDoWalkerActionException(message);
+	}
 
 	// For subtrees, reference to the origin tree for update propagations
 	private _upper_tree?:BoxTreeWalker;
 
-	static assertThat(test:boolean,message?:string) {
-		if (!test) throw new CanNotDoWalkerActionException(message);
-	}
-	
 	/**
 	 * 
 	 * @param root root box of the walker
@@ -288,7 +288,12 @@ export default class BoxTreeWalker {
 		}
 		return BoxTreeWalker.noSuchElement;
     }
-    
+	
+	/**
+	 * Rename the current box with a new name and optionnaly a new attributes list
+	 * @param name 
+	 * @param attributes 
+	 */
 	renameCurrent(name:QName, attributes?:Map<QName,string>) {
 		let renamed = this._current.copy({name:name,attributes:attributes});
 		this.updateCurrent(renamed);
@@ -304,18 +309,28 @@ export default class BoxTreeWalker {
 		return this._current;
 	}
 
+	/**
+	 * returns current box (with different structure, but properties and visual presentation unchanged)
+	 */
 	unwrapFirstChild() {
 		let children = this._current.children;
 		if (!children.hasNext())
 			throw new NoSuchElementException("there is no first child");
 		let firstChild = children.next().value!;
 		children.previous();
-		let children_array = children.consume();
-		if (firstChild.hasText())
-			children_array[0] = firstChild.withName(undefined);
-		else
-			children_array = firstChild.children.consume().concat(children_array.slice(1));
-		this.updateCurrent(this._current.withChildren(children_array));
+		console.log("unwrapFirstChild - " + firstChild.hasText());
+		let newChildren = firstChild.hasText() ? 
+			BoxTreeWalker.updateIn({
+				list_to_update:children,
+				from:0,
+				new_elements:[firstChild.withName(null)]}) : 
+			BoxTreeWalker.updateIn({
+				list_to_update:children,
+				from:0,
+				new_elements:firstChild.children
+			});
+		console.log(newChildren);
+		this.updateCurrent(this._current.withChildren(newChildren));
 		return this._current;
 	}
 
@@ -340,12 +355,7 @@ export default class BoxTreeWalker {
 			}) : BoxTreeWalker.updateIn({
 				list_to_update:siblings, from:i - 1, new_elements:nextSibling.children
 			});
-			
-		// let siblings_array = siblings.consume();
-		// if (nextSibling.hasText())
-		// 	siblings_array[i - 1] = nextSibling.withName(undefined);
-		// else
-		// 	siblings_array = siblings_array.slice(0, i - 1).concat(nextSibling.children.consume()).concat(siblings_array.slice(i));
+		
 		this.updateCurrent(parent.withChildren(newSiblings));
 		this.firstChild();
 		while (i-- > 2) this.nextSibling();
@@ -367,8 +377,6 @@ export default class BoxTreeWalker {
 			from:j-1,
 			new_elements:siblings
 		});
-		//let parentSiblings_array = parentSiblings.consume();
-		//parentSiblings_array = parentSiblings_array.slice(0, j - 1).concat(siblings.consume()).concat(parentSiblings_array.slice(j));
 		let newParent = this.parent().value!;
 		this.updateCurrent(newParent.withChildren(new_siblings));
 		this.firstChild();
@@ -573,146 +581,8 @@ export default class BoxTreeWalker {
 				updated_list.push(element!);
 			}
 		}
+		
 		return updated_list;
 	}
+
 }
-
-
-/*
-	nthBlock(index:number) {
-		BoxTreeWalker.assertThat(!this.firstDescendant(BoxFilter.isBlockAndHasNoBlockChildren).done);
-		for (let i = 0; i < index; i++)
-			BoxTreeWalker.assertThat(!this.firstFollowing(BoxFilter.isBlockAndHasNoBlockChildren).done);
-	}
-
-	nthReplacedElementOrTextBox(index: number) {
-		BoxTreeWalker.assertThat(!this.firstDescendant(BoxFilter.isReplacedElementOrTextBox).done);
-		for (let i = 0; i < index; i++)
-			BoxTreeWalker.assertThat(!this.firstFollowing(BoxFilter.isReplacedElementOrTextBox).done);
-	}
-
-	
-
-	
-
-	transformSingleRowTable(firstBlockIdx:number, blockCount:number) : BoxTreeWalker {
-		this.root();
-		this.nthBlock(firstBlockIdx);
-		while (true) {
-			BoxTreeWalker.assertThat(this.previousSibling().done);
-			let testedProps = this._current.props.cssprops;
-			if ( testedProps && testedProps.display == "table-cell")
-				break;
-			else {
-				BoxTreeWalker.assertThat(!(testedProps && testedProps.display === "block"));
-				BoxTreeWalker.assertThat(!this.parent().done);
-			}
-		}
-		this.renameCurrent(BoxTreeWalker.DIV);
-		BoxTreeWalker.assertThat(this.previousSibling().done);
-		while (true) {
-			if (!this.nextSibling().done) {
-				let testedProps = this._current.props.cssprops;
-				BoxTreeWalker.assertThat((testedProps && testedProps.display == "table-cell") || false);
-				this.renameCurrent(BoxTreeWalker.DIV);
-			} else
-				break;
-		}
-		BoxTreeWalker.assertThat(!this.parent().done);
-		//BoxTreeWalker.assertThat(this._current.props.cssprops && this._current.props.cssprops.display == "table-row");
-		this.renameCurrent(BoxTreeWalker.DIV);
-		BoxTreeWalker.assertThat(this.nextSibling().done);
-		BoxTreeWalker.assertThat(this.previousSibling().done);
-		BoxTreeWalker.assertThat(!this.parent().done);
-		if (true) { // this._current.props.cssprops && this._current.props.cssprops.display == "table-row-group"
-			BoxTreeWalker.assertThat(this.nextSibling().done);
-			BoxTreeWalker.assertThat(this.previousSibling().done);
-			BoxTreeWalker.assertThat(!this.parent().done);
-		}
-		//BoxTreeWalker.assertThat(this._current.props.cssprops && this._current.props.cssprops.display == "table");
-		this.firstChild();
-		this.unwrapParent();
-		let table = this.subTree();
-		BoxTreeWalker.assertThat(BoxTreeWalker.count(table, BoxFilter.isBlockAndHasNoBlockChildren) == blockCount);
-		return this;
-	}
-
-	markupHeading(firstBlockIdx: number, blockCount: number) : BoxTreeWalker {
-		let doc: BoxTreeWalker = this;
-		this.root();
-		this.nthBlock(firstBlockIdx);
-		// find ancestor that contains the specified number of blocks
-		while (true) {
-			let tmp: BoxTreeWalker = doc.clone();
-			if (tmp.previousSibling().done
-				&& !tmp.parent().done
-				&& BoxTreeWalker.count(tmp, BoxFilter.isBlockAndHasNoBlockChildren) <= blockCount) {
-				doc = tmp;
-			} else {
-				BoxTreeWalker.assertThat(BoxTreeWalker.count(doc, BoxFilter.isBlockAndHasNoBlockChildren) == blockCount);
-				break;
-			}
-		}
-		doc.renameCurrent(BoxTreeWalker.H1);
-		// remove all strong within the heading
-		let h1Walker: BoxTreeWalker = doc.subTree();
-		let isStrong: (node?: Box) => boolean = b => b ? BoxTreeWalker.STRONG == b.props.name : true;
-		while (!h1Walker.firstDescendant(isStrong).done || !h1Walker.firstFollowing(isStrong).done)
-			if (!h1Walker.previousSibling().done)
-				h1Walker.unwrapNextSibling();
-			else if (!h1Walker.parent().done)
-				h1Walker.unwrapFirstChild();
-			else
-				throw new Error("coding error");
-		// remove all div within the heading
-		h1Walker.root();
-		let isDiv: (node?: Box) => boolean = b => b ? BoxTreeWalker.DIV == b.props.name : true;
-		while (!h1Walker.firstDescendant(isDiv).done || !h1Walker.firstFollowing(isDiv).done)
-			h1Walker.renameCurrent(BoxTreeWalker._SPAN);
-		return doc;
-	}
-
-	removeImage(blockIdx: number, inlineIdx: number) : BoxTreeWalker {
-		this.root();
-		this.nthBlock(blockIdx);
-		if (inlineIdx >= 0) {
-			BoxTreeWalker.assertThat(inlineIdx < this.count(BoxFilter.isReplacedElementOrTextBox));
-			this.nthReplacedElementOrTextBox(inlineIdx);
-		}
-		BoxTreeWalker.assertThat(BoxTreeWalker.IMG == this._current.props.name);
-		BoxTreeWalker.assertThat(this._current.props.isReplacedElement);
-		this.renameCurrent(BoxTreeWalker._SPAN);
-		return this;
-	}
-
-
-	static IMG: QName = new QName({
-		namespace: "http://www.w3.org/1999/xhtml",
-		localPart: "img",
-		prefix: ""
-	});
-
-	static H1: QName = new QName({
-		namespace: "http://www.w3.org/1999/xhtml",
-		localPart: "h1",
-		prefix: ""
-	});
-
-	static STRONG: QName = new QName({
-		namespace: "http://www.w3.org/1999/xhtml",
-		localPart: "strong",
-		prefix: ""
-	});
-
-	static _SPAN: QName = new QName({
-		namespace: "http://www.w3.org/1999/xhtml",
-		localPart: "_span",
-		prefix: ""
-	});
-
-	static DIV:QName = new QName({
-        namespace: "http://www.w3.org/1999/xhtml",
-        localPart: "div",
-        prefix: ""
-	});
-	*/

@@ -1,3 +1,9 @@
+/**
+ * Box document model
+ * 
+ * #TODO :
+ */
+
 import ListIterator from "./ListIterator";
 import ListIterable from "./ListIterable";
 import IllegalArgumentException from "./exceptions/IllegalArgumentException";
@@ -6,7 +12,7 @@ import IllegalArgumentException from "./exceptions/IllegalArgumentException";
 import QName from './QName';
 import Attribute from './Attribute';
 import { Properties } from "csstype";
-import React, { Fragment, ReactElement } from "react";
+import React, { ReactElement } from "react";
 
 
 import Base64 from "./Base64";
@@ -15,6 +21,7 @@ import "../css/html5-semantic-classes.css";
 
 import html5_semantic_css from '../css/html5-semantic.inlined';
 import html4 from '../css/html4.inlined';
+import BoxFragment from "./BoxFragment";
 
 
 export enum BoxType {
@@ -29,7 +36,7 @@ interface BoxState{
 }
 
 /**
- * Boxes mod of rendering : 
+ * Boxes mod of html rendering : 
  * - HTML : render the content as html in an iframe with original computed css
  * - SEMANTIC : render the content as html in an iframe with semantic css
  * - TREE : render the content as a table presenting the tree of element that 
@@ -40,6 +47,9 @@ export enum BoxRenderMode{
 	TREE
 };
 
+/**
+ * 
+ */
 export enum Rendering{
 	// render as an element with name `getName()` and attributes `getAttributes()`, or as
 	// ANONYMOUS if isAnonymous() is true
@@ -71,7 +81,7 @@ export enum Rendering{
  */
 export interface BoxInterface {
 	type:BoxType,
-	name?:QName,
+	name?:QName | null,
 	attributes:Array<Attribute>,
 	text?:string,
 	isReplacedElement:boolean,
@@ -79,8 +89,8 @@ export interface BoxInterface {
 	cssprops?:Properties,
 	parent_key?:string,
 	parent_index?:number,
-	hovered_key?:string,
-	selected_key?:string,
+	hovered_keys?:Array<string>,
+	selected_keys?:Array<string>,
 	virtual?:boolean,
 	render_mode?:BoxRenderMode
 }
@@ -105,10 +115,11 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		this.childrenList = new ListIterable(this.props.children[Symbol.iterator]())
 		let path = (props.parent_key ? props.parent_key : "") + "/"+ (props.name? props.name.localPart : "text()");
 		this.key = path + (props.parent_index ? `[${props.parent_index}]` : "[0]");
+		
 		this.state = {
-			is_selected:(props.selected_key ? this.key.startsWith(props.selected_key) : false),
+			is_selected: props.selected_keys != null ? this.hasKeyInList(props.selected_keys) : false,
 			is_focused:false,
-			is_hovered:(props.hovered_key ? this.key.startsWith(props.hovered_key) : false) 
+			is_hovered:props.hovered_keys != null ? this.hasKeyInList(props.hovered_keys) : false 
 		};
 	}
 
@@ -150,8 +161,8 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 			cssprops:this.props.cssprops,
 			parent_key:this.props.parent_key,
 			parent_index:this.props.parent_index,
-			hovered_key:this.props.hovered_key,
-			selected_key:this.props.selected_key,
+			hovered_keys:this.props.hovered_keys,
+			selected_keys:this.props.selected_keys,
 			virtual:this.props.virtual,
 			render_mode:this.props.render_mode
 		} as BoxInterface;
@@ -159,7 +170,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 
 	public copy(
 			with_new: {
-				name?:QName, 
+				name?:QName | null, 
 				attributes?:Map<QName,string>, 
 				children?:ListIterator<Box>|Array<Box>, 
 				rendering?:Rendering,
@@ -176,7 +187,10 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		new_props.parent_index = Number.parseInt(keys[keys.length - 1].split('[')[1].split(']')[0]);
 		new_props.parent_key = keys.slice(0,keys.length - 1).join('/');
 
-		if(with_new.name != null) { // renaming the node if requested
+		if(with_new.name === null){ // request for the name to be deleted
+			new_props.name = with_new.name;
+			current_key = `${new_props.parent_key}/_[${new_props.parent_index}]`;
+		} else if(with_new.name !== undefined) { // renaming the node if requested
 			new_props.name = with_new.name;
 			current_key = `${new_props.parent_key}/${new_props.name.localPart}[${new_props.parent_index}]`;
 		}
@@ -245,7 +259,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 
 	private _hasText?:boolean;
 	hasText():boolean{
-		if(this.hasText == null){
+		if(this._hasText == null){
 			this._hasText = this.props.type == BoxType.INLINE && this.props.text != null && this.props.text !== "";
 		}
 		return this._hasText!;
@@ -271,10 +285,10 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 	}
 
 	/**
-	 
-	 * @param name 
+	 * Copy the current box with a new name
+	 * @param name either a valide QName, or null to copy the box with the name deleted
 	 */
-	withName(name:QName | undefined) {
+	withName(name:QName | null) {
 		
 		//Object.freeze(newBox);
 		return this.copy({name:name});;
@@ -319,8 +333,8 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 	computeHtml(args : {
 			rendering_start_path:string,
 			use_semantic_css?:boolean, 
-			hovering_path?:string, 
-			selection_path?:string
+			hovering_pathes?:Array<string>, 
+			selection_pathes?:Array<string>
 	}):string {
 		if (this.key.startsWith(args.rendering_start_path)){ // Node to render
 			// render block and its children
@@ -364,7 +378,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 					cssInlined += '"';
 				}
 				let cssClass = "";
-				if( (args.hovering_path ? this.key.startsWith(args.hovering_path) : false) ){
+				if( (args.hovering_pathes ? this.hasKeyInList(args.hovering_pathes) : false) ){
 					cssClass += "hovered ";
 				}
 				if(args.use_semantic_css && this.props.name){
@@ -382,8 +396,8 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 					for(let child of this.children){
 						content += child.computeHtml({
 							rendering_start_path:args.rendering_start_path,
-							hovering_path:args.hovering_path,
-							selection_path:args.selection_path,
+							hovering_pathes:args.hovering_pathes,
+							selection_pathes:args.selection_pathes,
 							use_semantic_css:args.use_semantic_css}
 						);
 					}/*
@@ -414,8 +428,8 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 					for(let child of this.children){
 						content += child.computeHtml({
 							rendering_start_path:args.rendering_start_path,
-							hovering_path:args.hovering_path,
-							selection_path:args.selection_path,
+							hovering_pathes:args.hovering_pathes,
+							selection_pathes:args.selection_pathes,
 							use_semantic_css:args.use_semantic_css});
 					}
 					return content;
@@ -434,8 +448,8 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 				return this.props.children.map((b:Box)=>{
 					return b.computeHtml({
 						rendering_start_path:args.rendering_start_path,
-						hovering_path:args.hovering_path,
-						selection_path:args.selection_path,
+						hovering_pathes:args.hovering_pathes,
+						selection_pathes:args.selection_pathes,
 						use_semantic_css:args.use_semantic_css});
 				}).join("");
 		} else return "";
@@ -445,14 +459,14 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 	 * Compute the React element that can be used in react rendering stage
 	 * @param rendering_start_path
 	 * @param use_semantic_css
-	 * @param hovering_path
-	 * @param selection_path
+	 * @param hovering_pathes
+	 * @param selection_pathes
 	 */
 	computeReactNode(args : {
 		rendering_start_path:string,
 		use_semantic_css?:boolean, 
-		hovering_path?:string, 
-		selection_path?:string,
+		hovering_pathes?:Array<string>, 
+		selection_pathes?:Array<string>,
 		onMouseEnterCallback?:(hovered_key:string)=>void,
 		onMouseLeaveCallback?:(hovered_key:string)=>void,
 		onSelectionCallback?:(selected_key:string)=>void
@@ -499,7 +513,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 					cssInlined += '"';
 				}
 				let cssClasses = new Array<string>();
-				if( (args.hovering_path ? this.key.startsWith(args.hovering_path) : false) || this.state.is_hovered ){
+				if( (args.hovering_pathes ? this.hasKeyInList(args.hovering_pathes) : false) || this.state.is_hovered ){
 					cssClasses.push("hovered");
 				}
 				if(args.use_semantic_css && this.props.name){
@@ -509,9 +523,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 					attributes_array.push(`"className":"${cssClasses.join(" ")}"`);
 				}
 				
-				//TODO  onmouseenter should always sent back the lowest child
 				
-
 				// Content of the node
 				let content = [];
 				if(this.props.children.length > 0){
@@ -596,8 +608,8 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 			args : {
 				rendering_start_path:string,
 				use_semantic_css?:boolean, 
-				hovering_path?:string, 
-				selection_path?:string,
+				hovering_pathes?:Array<string>, 
+				selection_pathes?:Array<string>,
 				onMouseEnterCallback?:(hovered_key:string)=>void,
 				onMouseLeaveCallback?:(hovered_key:string)=>void,
 				onSelectionCallback?:(selected_key:string)=>void
@@ -685,8 +697,8 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 			cssprops: this.props.cssprops,
 			parent_key: this.props.parent_key,
 			parent_index: this.props.parent_index,
-			hovered_key: this.props.hovered_key,
-			selected_key: this.props.selected_key,
+			hovered_key: this.props.hovered_keys,
+			selected_key: this.props.selected_keys,
 			hide: this.props.virtual,
 			render_mode: this.props.render_mode
 		};
@@ -695,7 +707,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		rendered_box.key = '/html[0]';
 
 		// recursively compute the html source as a string
-		let rendered_content = rendered_box.computeHtml({rendering_start_path:'/',hovering_path:this.props.hovered_key}); 
+		let rendered_content = rendered_box.computeHtml({rendering_start_path:'/',hovering_pathes:this.props.hovered_keys}); 
 		
 		//console.log(rendered_content);
 		return (<iframe 
@@ -798,13 +810,26 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		return box;
 	}
 
+	/**
+	 * 
+	 * @param existing_keys keys array reference. if not defined, a new one is created and return
+	 */
 	getKeys(existing_keys?:Array<string>){
 		let keys_array = existing_keys != null ? existing_keys : new Array<string>();
 		keys_array.push(this.key);
-		//console.log(this.children);
 		for(let child of this.children){
 			keys_array = child.getKeys(keys_array);
 		}
 		return keys_array;
 	}
+
+	hasKeyInList(keys_list:Array<string>){
+		for(let key of keys_list){
+			if(this.key.startsWith(key)){ 
+				return true;
+			}
+		}
+		return false;
+	}
+
 }

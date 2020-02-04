@@ -27,18 +27,21 @@ export default class QName{
     constructor(from:QName|QNameInterface){
         this.namespace = from.namespace;
 	    this.localPart = from.localPart;
-	    this.prefix = from.prefix;
+        this.prefix =  from.prefix != null ? from.prefix : "";
+        // empty prefix should be considered "undefined"
+        //if(this.prefix === "" || this.prefix == null) this.prefix = undefined;
     }
 
     /**
      * check object equality based on properties
      * @param name 
      */
-    equals(name:QName){
-        return (
-            name.namespace === this.namespace 
+    equals(name:QName | undefined | null){
+        return name != null ? 
+            (name.namespace === this.namespace 
                 && name.localPart === this.localPart 
-                && name.prefix === this.prefix);
+                && name.prefix === this.prefix) : 
+            false;
     }
 
     /**
