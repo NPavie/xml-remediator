@@ -27,66 +27,70 @@ const ace_mode_for_extension: { [key: string]: string } = {
 };
 
 
+interface AppState {
+    renderer_mode:BoxRenderMode,
+    hovered_key:string,
+    root_box:Box,
+    remediations_stack:Array<{range:BoxFragment,remediation:BoxRemediation,is_activated:boolean}>,
+    remediated_box:Box
+}
 
 
-export default class App extends React.Component {
-
-    state = {
-        renderer_mode:BoxRenderMode.SEMANTIC,
-        //input_viewer_css: ["App-input-viewer", "show"],
-        //drawer_button_css: ["App-button"],
-        //output_viewer_css: ["App-output-viewer", "with-drawer"],
-        //remediations_css:["App-remediation"],
-        //editor_width: "auto",
-        //input_file: "",
-        //input_content: "",
-        //output_content: "",
-        hovered_key:"",
-        //applicable_remediations: new Array<DOMRemediation>(),
-        //applied_remediations_stack: new Array<DOMRemediation>(),
-        root_box:Box.parse(JSON.stringify(test_document)),
-        remediation_stack:new Array<{range:BoxFragment,remediation:BoxRemediation,activated:boolean}>()
-    };
+export default class App extends React.Component <{},AppState> {
 
     
-
     constructor(props: any) {
         super(props);
         this.editorViewSelector = React.createRef();
         this.selectEditorMode = this.selectEditorMode.bind(this);
         this.onNodeHovering = this.onNodeHovering.bind(this);
-        
-        
-        this.state.remediation_stack.push({
+        this.onRemediationActionCheck = this.onRemediationActionCheck.bind(this);
+        this.onRemediationCheck = this.onRemediationCheck.bind(this);
+
+        // Application should receive (or load somehow):
+        // - A json bo document
+        // - A list of (BoxFragment,BoxRemediation) tuples
+        let root_box = Box.parse(JSON.stringify(test_document));
+
+        let remediations_stack = new Array<{range:BoxFragment,remediation:BoxRemediation,is_activated:boolean}>();
+
+        remediations_stack.push({
             range:new BoxFragment({block:0},3),
-            remediation:new BoxRemediation({actions:["transformTable(true)", "markupHeading(Transformer.H1)"]}),
-            activated:true
+            remediation:new BoxRemediation({
+                actions:[
+                    {function_call:"transformTable(true)", is_activated:true},
+                    {function_call:"markupHeading(Transformer.H1)",is_activated:true}],
+                onActionChangeCallback:(action_index)=>{
+                    this.onRemediationActionCheck(0,action_index)}
+                }),
+            is_activated:true
         });
         /*
-        this.state.remediation_stack.push({
+        remediations_stack.push({
             range:new BoxFragment(1,0,1),
             remediation:new BoxRemediation({actions:["removeImage()"]}),
             activated:true
         });*/
 
-        /*
-        let  transformed_root = new Transformer(this.doc.root());
-        try{
-            let remediation_1 = new BoxRemediation({actions:["transformTable(true)", "markupHeading(Transformer.H1)"]});
-            let res = remediation_1.applyOn(this.state.root_box,new BoxFragment(0,undefined,3));
-
-            // let remediation_2 = new BoxRemediation("removeImage()");
-            // res = remediation_2.applyOn(this.state.root_box,new BoxFragment(1,0,1));
-            console.log("Remediation result : ");
-            console.log(res);
-        } catch (err){
-            console.log("Error during remediation : ")
-            console.log(err);
-        }*/
 
         
+        let result = root_box;
+        remediations_stack.forEach((value:{range:BoxFragment,remediation:BoxRemediation, is_activated:boolean}) => {
+            if(value.is_activated) result = value.remediation.applyOn(result,value.range);
+        });
+        
+        this.state = {
+            renderer_mode:BoxRenderMode.SEMANTIC,
+            hovered_key:"",
+            root_box:root_box,
+            remediations_stack:remediations_stack,
+            remediated_box:result
+        };
+
         
     }
+
+    
     
     editorViewSelector:any;
     /**
@@ -140,6 +144,62 @@ export default class App extends React.Component {
         }
     }
 
+    /**
+     * function called when a box range checkbox changes of state
+     * @param stack_index 
+     */
+    onRemediationCheck(stack_index:number){
+        this.state.remediations_stack[stack_index].is_activated = !this.state.remediations_stack[stack_index].is_activated;
+        this.setState({
+            remediations_stack:this.state.remediations_stack
+        });
+        this.updateResult();
+    }
+
+    /**
+     * function called when an action checkbox changes state
+     * @param stack_index 
+     * @param action_index 
+     */
+    onRemediationActionCheck(stack_index:number,action_index:number){
+        let stack_element = this.state.remediations_stack[stack_index];
+        console.log(stack_element);
+        let i = 0;
+        let new_actions = stack_element.remediation.props.actions.map((action)=>{
+            let result = action;
+            if(i++ === action_index){
+                result.is_activated = !result.is_activated
+            }
+            return result;
+        });
+        console.log(new_actions);
+        this.state.remediations_stack[stack_index] = {
+            range:stack_element.range,
+            remediation:new BoxRemediation({
+                actions:new_actions,
+                onActionChangeCallback:(action_index)=>{
+                    this.onRemediationActionCheck(stack_index,action_index)}}),
+            is_activated:stack_element.is_activated
+        }
+        console.log(this.state.remediations_stack);
+        this.setState({
+            remediations_stack:this.state.remediations_stack
+        });
+        this.updateResult();
+    }
+
+    /**
+     * Request an update of the remediated result
+     */
+    updateResult(){
+        let result = this.state.root_box;
+        this.state.remediations_stack.forEach((value:{range:BoxFragment,remediation:BoxRemediation, is_activated:boolean}) => {
+            if(value.is_activated) result = value.remediation.applyOn(result,value.range);
+        });
+        this.setState({
+            remediated_box:result
+        });
+    }
 
     render() {
         return (
@@ -155,8 +215,9 @@ export default class App extends React.Component {
                 <main className="App-frame">
                     <RemediatedContentView 
                         displayed_root={this.state.root_box}
-                        remediations_stack={this.state.remediation_stack}
-                        />
+                        displayed_result={this.state.remediated_box}
+                        remediations_stack={this.state.remediations_stack}
+                        onRemediationChangeCallback={this.onRemediationCheck} />
                 </main>
                 
             </div>

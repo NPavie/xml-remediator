@@ -16,7 +16,9 @@ import BoxFragment from "./BoxFragment";
 interface RemediatedContentViewProperties{
     selectionCallback?:(selected_key:string)=>void,
     displayed_root:Box,
-    remediations_stack:Array<{range:BoxFragment,remediation:BoxRemediation, activated:boolean}>,
+    displayed_result:Box,
+    remediations_stack:Array<{range:BoxFragment,remediation:BoxRemediation, is_activated:boolean}>,
+    onRemediationChangeCallback?:(stack_index:number)=>void,
     css_stylesheet?:string
 
 }
@@ -24,24 +26,17 @@ interface RemediatedContentViewProperties{
 interface RemediatedContentViewState{
     last_hovered_keys:Array<string>|undefined,
     selected_keys:Array<string>|undefined,
-    remediations_stack:Array<{range:BoxFragment,remediation:BoxRemediation, activated:boolean}>,
-    displayed_result:Box
 }
 
 export default class RemediatedContentView extends React.Component<RemediatedContentViewProperties,RemediatedContentViewState>{
 
     constructor(props:RemediatedContentViewProperties){
         super(props);
-        let result = this.props.displayed_root;
-        this.props.remediations_stack.forEach((value:{range:BoxFragment,remediation:BoxRemediation, activated:boolean}) => {
-            if(value.activated) result = value.remediation.applyOn(result,value.range);
-        });
+        
         
         this.state = {
             last_hovered_keys:[],
-            selected_keys:[],
-            remediations_stack:props.remediations_stack.slice(),
-            displayed_result:result
+            selected_keys:[]
         };
         this.isHoveringBox = this.isHoveringBox.bind(this);
         this.isLeavingBox = this.isLeavingBox.bind(this);
@@ -75,16 +70,18 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
     }
 
     onRemediationChange(remediation_index:number){
+        if(this.props.onRemediationChangeCallback) this.props.onRemediationChangeCallback(remediation_index);
         
-        this.state.remediations_stack[remediation_index].activated = !this.state.remediations_stack[remediation_index].activated;
-        let result = this.props.displayed_root;
-        this.state.remediations_stack.forEach((value:{range:BoxFragment,remediation:BoxRemediation, activated:boolean}) => {
-            if(value.activated) result = value.remediation.applyOn(result,value.range);
-        });
-        this.setState({
-            remediations_stack:this.state.remediations_stack,
-            displayed_result:result
-        })
+        // let result = this.props.displayed_root;
+        // this.props.remediations_stack.forEach((value:{range:BoxFragment,remediation:BoxRemediation, is_activated:boolean}) => {
+        //     if(value.is_activated) {
+        //         result = value.remediation.applyOn(result,value.range);
+        //     }
+        // });
+        // this.setState({
+        //     displayed_result:result
+        // });
+
     }
 
 
@@ -119,7 +116,7 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
         
         // for each box, compute the array of "lowest block box"
         let in_rows = RemediatedContentView.computeBoxRows(this.props.displayed_root);
-        let out_rows = RemediatedContentView.computeBoxRows(this.state.displayed_result);
+        let out_rows = RemediatedContentView.computeBoxRows(this.props.displayed_result);
         
         let rows = new Array<JSX.Element>();
         let in_count = 0, out_count = 0,line_key = 0;
@@ -232,9 +229,11 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
         }
         
         let i= 0;
-        let remediation_list = this.state.remediations_stack.map((value:{range:BoxFragment,remediation:BoxRemediation}) => {
+        let remediation_list = this.props.remediations_stack.map((value:{range:BoxFragment,remediation:BoxRemediation}) => {
             return <li style={{listStyleType:"none",padding:"0"}}>
-                <input type="checkbox" checked={this.state.remediations_stack[i].activated} onChange={()=>this.onRemediationChange(i++)}/>
+                <input type="checkbox" 
+                        checked={this.props.remediations_stack[i].is_activated} 
+                        onChange={()=>{this.onRemediationChange(i++)}}/>
                 <label>Apply on block {value.range.block}</label> : <br/>{value.remediation.render()}</li>;
         });
 
@@ -269,75 +268,3 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
             </Fragment>);
     }
 }
-
-/*
-
-if(in_rows[in_count].key === out_rows[out_count].key){
-                rows.push(
-                    <tr key={`doc_leaf_${line_key}`}>
-                        <td key={`doc_leaf_${line_key}_in`}>{out_rows[in_count].computeIsolatedReactNode({
-                                rendering_start_path:'/html[0]/body[0]',
-                                use_semantic_css:true,
-                                hovering_path:hovered_key, 
-                                onMouseEnterCallback:this.isHoveringBox,
-                                onMouseLeaveCallback:this.isLeavingBox
-                            })}</td>
-                        <td key={`doc_leaf_${line_key}_out`}>{in_rows[out_count].computeIsolatedReactNode({
-                                rendering_start_path:'/html[0]/body[0]',
-                                use_semantic_css:true
-                            })}</td>
-                    </tr>
-                );
-                ++line_key;
-                ++in_count;
-                ++out_count;
-            }else{
-                // Check if one or more keys have been deleted from the input in the output
-                // ==> check if the current output key exists somewhere after in the input
-                let searched_key = out_rows[out_count].key;
-                let key_found = -1;
-                for(let i = in_count, end=in_rows.length; i < end || key_found > -1; ++i ){
-                    if(in_rows[i].key === searched_key){
-                        key_found = i;
-                    }
-                }
-                
-                if(key_found < 0){ // if key is not found in the input
-                    // this is a new element that is not in the input
-                    // Render an empty node in input and the node for the output
-                    rows.push(
-                        <tr key={`doc_leaf_${line_key}`}>
-                            <td key={`doc_leaf_${line_key}_out`}>{out_rows[out_count].computeIsolatedReactNode({
-                                rendering_start_path:'/html[0]/body[0]',
-                                use_semantic_css:true,
-                                hovering_path:hovered_key,
-                                onMouseEnterCallback:this.isHoveringBox,
-                                onMouseLeaveCallback:this.isLeavingBox
-                                })}</td>
-                            <td key={`doc_leaf_${line_key}_in`}/>
-                        </tr>);
-                    ++out_count;
-                    ++line_key;
-                } else { // The key has been found in the input later,
-                    // some element may have been deleted in the output 
-                    // Render the input boxes missing from output, whith empty elements in the output
-                    for(let i = in_count, end = key_found; i < end; ++i){
-                        rows.push(
-                            <tr key={`doc_leaf_${line_key}`}>
-                                <td key={`doc_leaf_${line_key}_out`}/>
-                                <td key={`doc_leaf_${line_key}_in`}>{in_rows[i].computeIsolatedReactNode({
-                                    rendering_start_path:'/html[0]/body[0]',
-                                    use_semantic_css:true,
-                                    hovering_path:hovered_key,
-                                    onMouseEnterCallback:this.isHoveringBox,
-                                    onMouseLeaveCallback:this.isLeavingBox
-                                    })}</td>
-                            </tr>);
-                        ++in_count;
-                        ++line_key;
-                    }
-
-                }
-            } 
-
-            */
