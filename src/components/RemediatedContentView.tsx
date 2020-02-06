@@ -1,7 +1,5 @@
 import React, { Fragment } from "react";
-import Transformation from "./Transformer";
-import { Box, BoxRenderMode, BoxType } from './Box';
-import BoxTreeWalker from './BoxTreeWalker';
+import { Box, BoxType } from './Box';
 
 import "./RemediatedContentView.css";
 
@@ -228,13 +226,12 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
             }
         }
         
-        let i= 0;
-        let remediation_list = this.props.remediations_stack.map((value:{range:BoxFragment,remediation:BoxRemediation}) => {
+        let remediation_list = this.props.remediations_stack.map((value:{range:BoxFragment,remediation:BoxRemediation},index:number) => {
             return <li style={{listStyleType:"none",padding:"0"}}>
                 <input type="checkbox" 
-                        checked={this.props.remediations_stack[i].is_activated} 
-                        onChange={()=>{this.onRemediationChange(i++)}}/>
-                <label>Apply on block {value.range.block}</label> : <br/>{value.remediation.render()}</li>;
+                        checked={this.props.remediations_stack[index].is_activated} 
+                        onChange={()=>{this.onRemediationChange(index)}}/>
+                <label>Apply on block {value.range.block}</label> : <br/>{value.remediation.render(this.props.remediations_stack[index].is_activated)}</li>;
         });
 
         // on the result side, highlights fragment instead of boxes

@@ -240,10 +240,9 @@ export default class Transformer {
 		doc.renameCurrent(headingElement);
 		//console.log(doc.root().getKeys());
 		// remove strong, em and small within the heading
-		// TODO debug
-		//doc = Transformer.removeEmInAllEmBox(doc, Transformer.STRONG);
-		//doc = Transformer.removeEmInAllEmBox(doc, Transformer.EM);
-		//doc = Transformer.removeEmInAllEmBox(doc, Transformer.SMALL);
+		doc = Transformer.removeEmInAllEmBox(doc, Transformer.STRONG);
+		doc = Transformer.removeEmInAllEmBox(doc, Transformer.EM);
+		doc = Transformer.removeEmInAllEmBox(doc, Transformer.SMALL);
 		// remove all div and p within the heading
 		
 		// remove all span within the heading
@@ -512,7 +511,7 @@ export default class Transformer {
 		}
 		doc = Transformer.wrapIfNeeded(doc, blockCount);
 		doc.renameCurrent(Transformer.FIGURE);
-		if (blockCount - captionBlockCount === 1 && captionBlockCount != 0) {
+		if (blockCount - captionBlockCount === 1 && captionBlockCount !== 0) {
 			doc.firstChild();
 			doc.nextSibling();
 			let name = doc.current().getName();

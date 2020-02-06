@@ -29,10 +29,11 @@ export default class ListIterable<T> implements Iterable<T>{
                 supplier:this.supplier,
                 list:this.list,
             });
-            // memoize iterator for future use
+            // memoize iterator for future use if the iterator is not empty
             let _isEmpty = true;
-            for(let e of temp){
+            while(temp.hasNext()) {
                 _isEmpty = false;
+                temp.next();
             }
             return _isEmpty;
         } else return false;

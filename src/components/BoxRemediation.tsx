@@ -14,6 +14,7 @@ interface Action{
 }
 
 /**
+ * Properties of the component
  * @param {Array<Action>} actions array of Action 
  * @param {()=>void} onActionChangeCallback function called when an action checkbox changes
  */
@@ -32,15 +33,6 @@ interface BoxRemediationprops{
  */
 export default class BoxRemediation extends React.Component<BoxRemediationProperties,BoxRemediationprops>{
     // Actions are alledgedly functions from a "Transformation" object created for a document
-    
-
-    /**
-     * Create a remediation scenario from a list of "Transformation" actions call
-     * @param {BoxRemediationProperties} props actions list and callback function for checkboxes
-     */
-    constructor(props:BoxRemediationProperties){
-        super(props);
-    }
 
     /**
      * Apply the list of actions on a document and return an updated one
@@ -90,13 +82,14 @@ export default class BoxRemediation extends React.Component<BoxRemediationProper
 
     
 
-    render(){
+    render(is_activated?:boolean){
         
         let actions_list = this.props.actions.map((value:Action,index:number) => {
-            return <li style={{listStyleType:"none",marginLeft:"10px"}}>
+            return <li style={{listStyleType:"none",marginLeft:"10px"}} >
                 <input type="checkbox" 
                         checked={this.props.actions[index].is_activated}
-                        onChange={()=>{ this.onActionChange(index);}}/>
+                        onChange={()=>{ this.onActionChange(index);}}
+                        disabled={!is_activated}/>
                 <label>{value.function_call.replace('Transformer.','')}</label></li>;
         });
 

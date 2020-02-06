@@ -1,4 +1,3 @@
-import ConcurrentModificationException from './exceptions/ConcurrentModificationException';
 import ListIterator from './ListIterator';
 import QName from './QName';
 
@@ -7,7 +6,6 @@ import Optional from './Optional';
 
 import NoSuchElementException from './exceptions/NoSuchElementException';
 import CanNotDoWalkerActionException from './exceptions/CanNotDoWalkerActionException';
-import BoxFragment from './BoxFragment';
 
 
 function deepCopyStack(stack:Array<ListIterator<Box>>) {
@@ -108,7 +106,7 @@ export default class BoxTreeWalker {
 	}
     
     nextSibling() : Optional<Box> {
-		if (this.path.length == 0) return BoxTreeWalker.noSuchElement;
+		if (this.path.length === 0) return BoxTreeWalker.noSuchElement;
 		else {
 			let siblings = this.path[this.path.length - 1];
 			if (!siblings.hasNext()) return BoxTreeWalker.noSuchElement;
@@ -122,10 +120,10 @@ export default class BoxTreeWalker {
 	
 	
 	parent() : Optional<Box> {
-		if (this.path.length == 0) return BoxTreeWalker.noSuchElement;
+		if (this.path.length === 0) return BoxTreeWalker.noSuchElement;
 		else {
 			this.path.pop();
-			if (this.path.length == 0) this._current = this._root;
+			if (this.path.length === 0) this._current = this._root;
 			else {
 				let peek = this.path[this.path.length - 1];
 				this._current = peek.previous().value;
@@ -274,7 +272,7 @@ export default class BoxTreeWalker {
 						while (keep_seeking_up){ 
 							next = this.parent();
 							if (next.isPresent()) {
-								if (this.path.length == startDepth) return BoxTreeWalker.noSuchElement;
+								if (this.path.length === startDepth) return BoxTreeWalker.noSuchElement;
 								next = this.nextSibling();
 								if (next.isPresent()) keep_seeking_up = false;;
 							} else keep_seeking_up = false;;
@@ -305,7 +303,7 @@ export default class BoxTreeWalker {
 		if (!children.hasNext())
 			throw new NoSuchElementException("there is no first child");
 		children.next();
-		this.updateCurrent(this._current.withChildren(children));
+		this.updateCurrent(this._current.copy({children:children}));
 		return this._current;
 	}
 
@@ -318,24 +316,22 @@ export default class BoxTreeWalker {
 			throw new NoSuchElementException("there is no first child");
 		let firstChild = children.next().value!;
 		children.previous();
-		console.log("unwrapFirstChild - " + firstChild.hasText());
 		let newChildren = firstChild.hasText() ? 
 			BoxTreeWalker.updateIn({
 				list_to_update:children,
 				from:0,
-				new_elements:[firstChild.withName(null)]}) : 
+				new_elements:[firstChild.copy({name:null,attributes:null})]}) : 
 			BoxTreeWalker.updateIn({
 				list_to_update:children,
 				from:0,
 				new_elements:firstChild.children
 			});
-		console.log(newChildren);
-		this.updateCurrent(this._current.withChildren(newChildren));
+		this.updateCurrent(this._current.copy({children:newChildren}));
 		return this._current;
 	}
 
 	unwrapNextSibling() {
-		if (this.path.length == 0)
+		if (this.path.length === 0)
 			throw new NoSuchElementException("there is no next sibling");
 		let siblings = this.path[this.path.length - 1];
 		if (!siblings.hasNext())
@@ -344,28 +340,26 @@ export default class BoxTreeWalker {
 		let nextSibling = siblings.next().value!;
 		let i = siblings.rewind();
 
-		let newSiblings = nextSibling.hasText()
-			? BoxTreeWalker.updateIn({
-				list_to_update:siblings, from:i - 1, new_elements:[
-					nextSibling.copy({
-						name:undefined,
-						attributes:new Map<QName,string>()
-					})
-				]
-			}) : BoxTreeWalker.updateIn({
-				list_to_update:siblings, from:i - 1, new_elements:nextSibling.children
-			});
+		let newSiblings = nextSibling.hasText() ? 
+			BoxTreeWalker.updateIn({
+				list_to_update:siblings, 
+				from:i - 1, 
+				new_elements:[nextSibling.copy({name:null,attributes:null})]}) : 
+			BoxTreeWalker.updateIn({
+				list_to_update:siblings, 
+				from:i - 1, 
+				new_elements:nextSibling.children});
 		
-		this.updateCurrent(parent.withChildren(newSiblings));
+		this.updateCurrent(parent.copy({children:newSiblings}));
 		this.firstChild();
 		while (i-- > 2) this.nextSibling();
 		return this._current;
 	}
 
 	unwrapParent() {
-		if (this.path.length == 0)
+		if (this.path.length === 0)
 			throw new NoSuchElementException("there is no parent");
-		if (this.path.length == 1)
+		if (this.path.length === 1)
 			throw new CanNotDoWalkerActionException("root can not be unwrapped");
 		let siblings = this.path[this.path.length - 1];
 		this.parent();
@@ -378,7 +372,7 @@ export default class BoxTreeWalker {
 			new_elements:siblings
 		});
 		let newParent = this.parent().value!;
-		this.updateCurrent(newParent.withChildren(new_siblings));
+		this.updateCurrent(newParent.copy({children:new_siblings}));
 		this.firstChild();
 		while (i-- > 1) this.nextSibling();
 		while (j-- > 1) this.nextSibling();
@@ -395,7 +389,7 @@ export default class BoxTreeWalker {
     
     
     updateCurrent(newCurrent:Box) {
-		if (this.path.length == 0)
+		if (this.path.length === 0)
 			this.updateRoot(newCurrent);
 		else {
 			let newPath = [];
@@ -404,9 +398,8 @@ export default class BoxTreeWalker {
 				let siblings = this.path[this.path.length - 1];
 				let parent = this.parent().value!;
 				let i = BoxTreeWalker.rewind(siblings);
-				cur = parent.withChildren(
-						BoxTreeWalker.updateIn({list_to_update:siblings,from:i-1,new_elements:[cur]})
-				);
+				cur = parent.copy({
+					children:BoxTreeWalker.updateIn({list_to_update:siblings,from:i-1,new_elements:[cur]})});
 				siblings = cur.children;
 				BoxTreeWalker.forward(siblings,i);
 				newPath.unshift(siblings);
@@ -506,11 +499,10 @@ export default class BoxTreeWalker {
 		return i;
 	}
 
-	public wrapNextSiblings(siblingCount:number, wrapper:QName, attributes?:Map<QName,string> ) {
+	public wrapNextSiblings(siblingCount:number, wrapper?:QName, attributes?:Map<QName,string> ) {
 		if (this.path.length === 0)
 			throw new NoSuchElementException("there are no next siblings");
 		let siblings = this.path[this.parent.length - 1];
-		let parent = this.parent().value;
 		let siblingsToWrap = new Array<Box>();
 		for (let i = 0; i < siblingCount; i++) {
 			if (!siblings.hasNext())
@@ -523,8 +515,9 @@ export default class BoxTreeWalker {
 			Box.AnonymousBlockBox(siblingsToWrap) :
 			Box.AnonymousInlineBox(siblingsToWrap);
 			
-		if (wrapper || attributes)
+		if (wrapper != null || attributes != null){
 			newBox = newBox.copy({name:wrapper, attributes:attributes});
+		}
 		this.updateCurrent(
 				this._current.copy({
 					children:BoxTreeWalker.updateIn({

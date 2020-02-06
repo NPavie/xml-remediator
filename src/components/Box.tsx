@@ -15,13 +15,10 @@ import { Properties } from "csstype";
 import React, { ReactElement } from "react";
 
 
-import Base64 from "./Base64";
-
 import "../css/html5-semantic-classes.css";
 
 import html5_semantic_css from '../css/html5-semantic.inlined';
 import html4 from '../css/html4.inlined';
-import BoxFragment from "./BoxFragment";
 
 
 export enum BoxType {
@@ -41,10 +38,9 @@ interface BoxState{
  * - SEMANTIC : render the content as html in an iframe with semantic css
  * - TREE : render the content as a table presenting the tree of element that 
  */
-export enum BoxRenderMode{
-	HTML,
-	SEMANTIC,
-	TREE
+export enum ContentCSS{
+	DEFAULT,
+	SEMANTIC
 };
 
 /**
@@ -77,7 +73,7 @@ export enum Rendering{
  * @param {boolean | undefined} parent_hovered true if the parent is currently hovered
  * @param {boolean | undefined} parent_selected true if the
  * @param {boolean | undefined} virtual true if the element is a virtual box (not in the document tree)
- * @param {BoxRenderMode | undefined} render_mode 
+ * @param {ContentCSS | undefined} render_mode 
  */
 export interface BoxInterface {
 	type:BoxType,
@@ -92,7 +88,7 @@ export interface BoxInterface {
 	hovered_keys?:Array<string>,
 	selected_keys?:Array<string>,
 	virtual?:boolean,
-	render_mode?:BoxRenderMode
+	rendering_css?:ContentCSS
 }
 
 
@@ -105,6 +101,10 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 	public key:string = "";
 	public rendering:Rendering = Rendering.DEFAULT;
 
+	
+	private static IMG:QName = new QName({namespace:"http://www.w3.org/1999/xhtml",localPart:"img"});
+
+
 	/**
 	 * Create a Box object from a json BoxInterface object
 	 * @param {BoxInterface} props 
@@ -113,7 +113,9 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		super(props);
 		//this.children = ListIterable.from<Box>(this.props.children[Symbol.iterator]());
 		this.childrenList = new ListIterable(this.props.children[Symbol.iterator]())
-		let path = (props.parent_key ? props.parent_key : "") + "/"+ (props.name? props.name.localPart : "text()");
+		let local_name = props.name ? props.name.localPart :
+			props.text ? "text()" : "_"; 
+		let path = (props.parent_key ? props.parent_key : "") + "/"+ local_name;
 		this.key = path + (props.parent_index ? `[${props.parent_index}]` : "[0]");
 		
 		this.state = {
@@ -164,14 +166,14 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 			hovered_keys:this.props.hovered_keys,
 			selected_keys:this.props.selected_keys,
 			virtual:this.props.virtual,
-			render_mode:this.props.render_mode
+			rendering_css:this.props.rendering_css
 		} as BoxInterface;
 	}
 
 	public copy(
 			with_new: {
 				name?:QName | null, 
-				attributes?:Map<QName,string>, 
+				attributes?:Map<QName,string> | null, 
 				children?:ListIterator<Box>|Array<Box>, 
 				rendering?:Rendering,
 				// for key propagation
@@ -201,7 +203,9 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 			new_props.parent_index = with_new.parent_index;
 		}
 
-		if(with_new.attributes != null){ // stash new attributes
+		if(with_new.attributes === null){ // request for the attributes to be deleted
+			new_props.attributes = new Array<Attribute>(); // empty attribute array
+		} else if(with_new.attributes !== undefined){ // stash new attributes
 			new_props.attributes = new Array<Attribute>();
 			with_new.attributes.forEach((val:string,key:QName)=>{
 				new_props.attributes.push({name:key, value:val} as Attribute);
@@ -225,6 +229,27 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		newBox.rendering = (with_new.rendering) ? with_new.rendering : this.rendering;
 		newBox._hasText = this._hasText;
 		newBox._isBlockAndHasNoBlockChildren = this._isBlockAndHasNoBlockChildren;
+
+		// tree coherence check when new children are given
+		if(with_new.children != null){
+			if (this.props.type === BoxType.BLOCK) {
+				let hasBlockChildren = null;
+				let prevIsAnonymous = null;
+				for (let c of newBox.childrenList) {
+					if (hasBlockChildren == null)
+						hasBlockChildren = (c.props.type === BoxType.BLOCK);
+					else if (hasBlockChildren !== (c.props.type === BoxType.BLOCK))
+						throw new IllegalArgumentException("block and inline can not be siblings");
+					if (c.props.name == null && prevIsAnonymous === true)
+						throw new IllegalArgumentException("no adjacent anonymous block boxes");
+					prevIsAnonymous = (c.props.name == null);
+				}
+			} else {
+				for (let c of newBox.childrenList)
+					if (c.props.type === BoxType.BLOCK)
+						throw new IllegalArgumentException("no block inside inline");
+			}
+		}
 		// update children keys
 		//i = 0;
 		//for(let child of newBox.children){
@@ -254,19 +279,19 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 	}
 
 	isReplacedElement(){
-		return this.props.isReplacedElement;
+		return this.props.isReplacedElement || (this.props.name ? this.props.name.equals(Box.IMG) : false);
 	}
 
 	private _hasText?:boolean;
 	hasText():boolean{
 		if(this._hasText == null){
-			this._hasText = this.props.type == BoxType.INLINE && this.props.text != null && this.props.text !== "";
+			this._hasText = (this.props.type === BoxType.INLINE && this.props.text != null && this.props.text !== "");
 		}
 		return this._hasText!;
 	}
 
 	isAnonymous(){
-		return this.getName() == null;
+		return this.getName() == null || this.rendering === Rendering.ANONYMOUS;
 	}
 
 	getName(){
@@ -284,39 +309,6 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		return this.attributes;
 	}
 
-	/**
-	 * Copy the current box with a new name
-	 * @param name either a valide QName, or null to copy the box with the name deleted
-	 */
-	withName(name:QName | null) {
-		
-		//Object.freeze(newBox);
-		return this.copy({name:name});;
-	}
-
-	withChildren(children:Array<Box> | ListIterator<Box>) {
-		let newBox = this.copy({children:children});
-		
-		if (this.props.type === BoxType.BLOCK) {
-			let hasBlockChildren = null;
-			let prevIsAnonymous = null;
-			for (let c of newBox.childrenList) {
-				if (hasBlockChildren == null)
-					hasBlockChildren = (c.props.type === BoxType.BLOCK);
-				else if (hasBlockChildren !== (c.props.type === BoxType.BLOCK))
-					throw new IllegalArgumentException("block and inline can not be siblings");
-				if (c.props.name == null && prevIsAnonymous === true)
-					throw new IllegalArgumentException("no adjacent anonymous block boxes");
-				prevIsAnonymous = (c.props.name == null);
-			}
-		} else {
-			for (let c of newBox.childrenList)
-				if (c.props.type === BoxType.BLOCK)
-					throw new IllegalArgumentException("no block inside inline");
-		}
-		//Object.freeze(newBox);
-		return newBox;
-	}
 
 	/** REACT RENDERING SECTION */
 
@@ -471,7 +463,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		onMouseLeaveCallback?:(hovered_key:string)=>void,
 		onSelectionCallback?:(selected_key:string)=>void
 	}):React.FunctionComponentElement<{}> | React.DOMElement<any,Element> | ReactElement<{}>{
-		if (this.key.startsWith(args.rendering_start_path)){ // Node to render
+		if (this.key.startsWith(args.rendering_start_path) && this.rendering !== Rendering.SKIP){ // Node to render
 			// render block and its children
 			if(this.props.name){
 				let node_name = this.props.name.prefix ? 
@@ -534,7 +526,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 					content.push(React.createElement(React.Fragment,null,this.props.text))
 				}
 				
-				let attributes = JSON.parse(`{${attributes_array.filter((el=>{return el != "";})).join(',')}}`);
+				let attributes = JSON.parse(`{${attributes_array.filter((el=>{return el !== "";})).join(',')}}`);
 				
 				// Adding event callbacks
 				if(args.onMouseEnterCallback){
@@ -651,7 +643,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		//console.log(rendered_children);
 		// new css style tag
 		let css = new Box({
-			text:this.props.render_mode == BoxRenderMode.HTML ? html4 : html5_semantic_css,
+			text:this.props.rendering_css === ContentCSS.DEFAULT ? html4 : html5_semantic_css,
 			attributes:[],
 			name:new QName({
 				prefix:"",
@@ -700,7 +692,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 			hovered_key: this.props.hovered_keys,
 			selected_key: this.props.selected_keys,
 			hide: this.props.virtual,
-			render_mode: this.props.render_mode
+			render_mode: this.props.rendering_css
 		};
 		rendered_box_props.children = rendered_children;
 		let rendered_box = new Box(rendered_box_props);
@@ -713,7 +705,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		return (<iframe 
 			title="html_view"
 			//srcDoc={rendered_content} // not compatible with edge and legacy browser
-			src={ "data:text/html;charset=utf-8, " + encodeURIComponent(rendered_content)} // + Base64.encodeString(rendered_content)} 
+			src={ "data:text/html;charset=utf-8, " + encodeURIComponent(rendered_content)}
 			height="100%" width="100%"
 			contentEditable={true} />);
 			// */	
@@ -752,7 +744,8 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 			key = key.substr(0, key.length - 1);
 		}
 		if(this.key === key 
-				|| (key.startsWith(this.key) && key.length - this.key.length <= 3) ){// if its an incomplete key like /html[0]/hea[0]/style 
+				|| (key.startsWith(this.key) && key.length - this.key.length <= 3) ){
+			// => if its an incomplete key like /html[0]/hea[0]/style 
 			return this;
 		} else for(let i = 0, end = this.props.children.length; i < end; ++i){
 			if (key.startsWith(this.props.children[i].key)){
