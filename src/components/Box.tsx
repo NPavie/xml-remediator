@@ -34,9 +34,8 @@ interface BoxState{
 
 /**
  * Boxes mod of html rendering : 
- * - HTML : render the content as html in an iframe with original computed css
- * - SEMANTIC : render the content as html in an iframe with semantic css
- * - TREE : render the content as a table presenting the tree of element that 
+ * - HTML : render the content as html with original computed css properties
+ * - SEMANTIC : render the content as html with semantic css classes
  */
 export enum ContentCSS{
 	DEFAULT,
@@ -824,5 +823,6 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		}
 		return false;
 	}
+	
 
 }

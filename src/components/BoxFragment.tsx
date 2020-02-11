@@ -9,9 +9,11 @@ export default class BoxFragment {
     
     /**
      * 
-     * @param start fragment start : an object {block:number, inline?:number} 
-     * where block is the starting block box index and inline, if defined, the starting inline
-     * @param size 
+     * @param start fragment start : an object {block:number, inline?:number} where
+     * - block is the starting "final" (with no block children) block box index ;
+     * - inline, if defined, is the starting inline within the selected block
+     * @param size number of node to select at and after the specified start level 
+     * (including the node pointed by the start parameter, so it cannot be less than 1)
      */
     constructor(start:{block:number, inline?:number}, size:number = 1) {
         if (start.block < 0) throw new Error('startBlockIndex cannot be negative');

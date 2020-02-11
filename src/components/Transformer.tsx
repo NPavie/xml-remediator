@@ -4,6 +4,7 @@ import BoxTreeWalker, { BoxFilter } from "./BoxTreeWalker";
 import QName, { QNameInterface } from './QName';
 import CanNotPerformTransformerException from "./exceptions/CanNotPerformTransformationException";
 import BoxFragment from "./BoxFragment";
+import Optional from "./Optional";
 
 
 
@@ -149,7 +150,7 @@ export default class Transformer {
 	}
 
     /**
-	 * @param blockCount number of blocks in table (one or more)
+	 * @param blockCount number of expected blocks in table (one or more)
 	 */
 	private static transformTable( doc: BoxTreeWalker, blockCount: number, singleRow: boolean) {
 		Transformer.assertThat(doc.current().isBlockAndHasNoBlockChildren());
@@ -688,11 +689,22 @@ export default class Transformer {
 	 * @param doc root box of the document to be 
 	 * @param frag 
 	 */
-	public static getFragmentKeys(doc:Box,frag:BoxFragment){
-		let temp = new BoxTreeWalker(doc);
-
+	public getFragmentKeys(){
+		let keys = new Array<string>();
+		this.doc.root();
+		this.doc = this.moveToRange(this.doc,this.transformedFragment);
+		keys.push(this.doc.current().key);
+		let nb_box = 1;
+		let child:Optional<Box>;
+		while((child = this.doc.nextSibling()).isPresent() 
+				&& nb_box <= this.transformedFragment.size){
+			keys.push(child.value!.key);
+			++nb_box;
+		}
+		return keys;		
 		
 	}
+	
 	
 
 }

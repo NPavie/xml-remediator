@@ -10,6 +10,7 @@ import { Box, ContentCSS } from './components/Box';
 import RemediatedContentView from "./components/RemediatedContentView";
 import BoxRemediation from './components/BoxRemediation';
 import BoxFragment from './components/BoxFragment';
+import Transformer from './components/Transformer';
 
 /**
  * Hash of available ace modes per extension
@@ -27,7 +28,7 @@ const ace_mode_for_extension: { [key: string]: string } = {
 
 
 interface AppState {
-    renderer_mode:ContentCSS,
+    choosen_css:ContentCSS,
     hovered_key:string,
     root_box:Box,
     remediations_stack:Array<{
@@ -35,7 +36,9 @@ interface AppState {
         remediation:BoxRemediation,
         is_activated:boolean,
         could_be_applied?:boolean}>,
-    remediated_box:Box
+    fragments_root_box_keys:Array<Array<string>>,
+    remediated_box:Box,
+    fragments_remediated_box_keys:Array<Array<string>>
 }
 
 
@@ -45,7 +48,7 @@ export default class App extends React.Component <{},AppState> {
     constructor(props: any) {
         super(props);
         this.editorViewSelector = React.createRef();
-        this.selectEditorMode = this.selectEditorMode.bind(this);
+        this.onCSSSelection = this.onCSSSelection.bind(this);
         this.onNodeHovering = this.onNodeHovering.bind(this);
         this.onRemediationActionCheck = this.onRemediationActionCheck.bind(this);
         this.onRemediationCheck = this.onRemediationCheck.bind(this);
@@ -80,41 +83,59 @@ export default class App extends React.Component <{},AppState> {
             is_activated:false
         });
 
-
-        
         let result = root_box;
         remediations_stack.forEach((value:{range:BoxFragment,remediation:BoxRemediation, is_activated:boolean}) => {
             if(value.is_activated) result = value.remediation.applyOn(result,value.range);
         });
-        
+
         this.state = {
-            renderer_mode:ContentCSS.SEMANTIC,
+            choosen_css:ContentCSS.SEMANTIC,
             hovered_key:"",
             root_box:root_box,
             remediations_stack:remediations_stack,
-            remediated_box:result
+            remediated_box:result,
+            fragments_root_box_keys:remediations_stack.map((value:{range:BoxFragment})=>{
+                return this.computeFragmentKeys(root_box,value.range);
+            }),
+            fragments_remediated_box_keys:remediations_stack.map((value:{range:BoxFragment})=>{
+                return this.computeFragmentKeys(result,value.range);
+            })
         };
 
-        
     }
 
+    computeFragmentKeys(doc:Box,fragment:BoxFragment){
+        return  new Transformer(doc).moveTo(
+                    fragment.block,
+                    fragment.size,
+                    fragment.inline
+                ).getFragmentKeys();
+    }
     
     
     editorViewSelector:any;
     /**
      * Change editor display selector
      */
-    selectEditorMode(){
-        console.log(this.editorViewSelector.current.value as ContentCSS);
+    onCSSSelection(){
+        const css_selector = (value:string)=>{
+            switch(+value){
+                case ContentCSS.SEMANTIC as number:
+                    return ContentCSS.SEMANTIC;
+                case ContentCSS.DEFAULT as number:
+                default :
+                    return ContentCSS.DEFAULT;
+            }
+        }
+        // Note : the "current.value" is of type string
         this.setState({
-            renderer_mode:this.editorViewSelector.current.value as ContentCSS
+            choosen_css:css_selector(this.editorViewSelector.current.value)
         })
     }
 
     
     onNodeHovering(key:string,is_hovered:boolean){
-        if(is_hovered){
-            //console.log(key + " is hovered");   
+        if(is_hovered){  
             this.setState({hovered_key:key});
         } else {
             this.setState({hovered_key:""});
@@ -126,11 +147,24 @@ export default class App extends React.Component <{},AppState> {
      * @param stack_index 
      */
     onRemediationCheck(stack_index:number){
-        this.state.remediations_stack[stack_index].is_activated = !this.state.remediations_stack[stack_index].is_activated;
+        let new_stack = this.state.remediations_stack.slice();
+        new_stack[stack_index].is_activated = !new_stack[stack_index].is_activated;
+        let remediated_box = this.updateResult(new_stack);
+        
+        // update the remediated fragments keys
+        let stack_element = this.state.remediations_stack[stack_index];
+        let verif = new Transformer(remediated_box).moveTo(
+            stack_element.range.block,
+            stack_element.range.size,
+            stack_element.range.inline
+        ).getFragmentKeys();
+        this.state.fragments_remediated_box_keys[stack_index] = verif
+        
         this.setState({
-            remediations_stack:this.state.remediations_stack
+            fragments_remediated_box_keys:this.state.fragments_remediated_box_keys,
+            remediations_stack:new_stack,
+            remediated_box:remediated_box
         });
-        this.updateResult();
     }
 
     /**
@@ -139,7 +173,8 @@ export default class App extends React.Component <{},AppState> {
      * @param action_index 
      */
     onRemediationActionCheck(stack_index:number,action_index:number){
-        let stack_element = this.state.remediations_stack[stack_index];
+        let new_stack = this.state.remediations_stack.slice();
+        let stack_element = new_stack[stack_index];
         let i = 0;
         let new_actions = stack_element.remediation.props.actions.map((action)=>{
             let result = action;
@@ -148,7 +183,7 @@ export default class App extends React.Component <{},AppState> {
             }
             return result;
         });
-        this.state.remediations_stack[stack_index] = {
+        new_stack[stack_index] = {
             range:stack_element.range,
             remediation:new BoxRemediation({
                 actions:new_actions,
@@ -156,29 +191,39 @@ export default class App extends React.Component <{},AppState> {
                     this.onRemediationActionCheck(stack_index,action_index)}}),
             is_activated:stack_element.is_activated
         }
+        
+        let remediated_box = this.updateResult(new_stack);
+        // update the remediated fragments keys
+        let verif = new Transformer(remediated_box).moveTo(
+            stack_element.range.block,
+            stack_element.range.size,
+            stack_element.range.inline
+        ).getFragmentKeys();
+        this.state.fragments_remediated_box_keys[stack_index] = verif
+        
         this.setState({
-            remediations_stack:this.state.remediations_stack
+            remediations_stack:new_stack,
+            fragments_remediated_box_keys:this.state.fragments_remediated_box_keys,
+            remediated_box:remediated_box
         });
-        this.updateResult();
+
     }
 
     /**
-     * Request an update of the remediated result
+     * Request an update of the remediated result, request the state update and return the new remediated box
      */
-    updateResult(){
+    updateResult(with_new_stack:Array<{range:BoxFragment,remediation:BoxRemediation,is_activated:boolean}>){
         
         let result = this.state.root_box;
-        this.state.remediations_stack.forEach((value:{range:BoxFragment,remediation:BoxRemediation, is_activated:boolean}) => {
+        with_new_stack.forEach((value:{range:BoxFragment,remediation:BoxRemediation, is_activated:boolean}) => {
             try {
                 if(value.is_activated) result = value.remediation.applyOn(result,value.range);
             } catch (error) {
                 toast("This transformation cannot be applied in the selected state");
-                // 
+                //  TODO : mark the fragment and the transformation (and the action ?) as "in error" in the UI
             }
         });
-        this.setState({
-            remediated_box:result
-        });
+        return result;
     }
 
     render() {
@@ -186,8 +231,8 @@ export default class App extends React.Component <{},AppState> {
             <div className="App">
                 <ToastContainer />
                 <header className="App-header">
-                    <label>Display : </label>
-                    <select ref={this.editorViewSelector} onChange={()=>{this.selectEditorMode()}} defaultValue={ContentCSS.SEMANTIC}>
+                    <label htmlFor="display-selector">Select a CSS</label>
+                    <select name="display-selector" id="display-selector" ref={this.editorViewSelector} onChange={()=>{this.onCSSSelection()}} defaultValue={ContentCSS.SEMANTIC}>
                         <option value={ContentCSS.DEFAULT}>Original content</option>
                         <option value={ContentCSS.SEMANTIC}>Content with semantic</option>
                     </select>
@@ -197,7 +242,10 @@ export default class App extends React.Component <{},AppState> {
                         displayed_root={this.state.root_box}
                         displayed_result={this.state.remediated_box}
                         remediations_stack={this.state.remediations_stack}
-                        onRemediationChangeCallback={this.onRemediationCheck} />
+                        onRemediationChangeCallback={this.onRemediationCheck} 
+                        fragments_result_keys={this.state.fragments_remediated_box_keys}
+                        fragments_root_keys={this.state.fragments_root_box_keys}
+                        content_css={this.state.choosen_css}/>
                 </main>
                 
             </div>
