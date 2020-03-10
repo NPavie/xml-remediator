@@ -1,6 +1,7 @@
 .semantic_div, 
 .semantic_p, 
 .semantic_h1, 
+.semantic_a, 
 .semantic_strong, 
 .semantic_em, 
 .semantic_table, 
@@ -19,6 +20,7 @@
 .semantic_h1::before, 
 .semantic_strong::before, 
 .semantic_em::before, 
+.semantic_a::before, 
 .semantic_table::before, 
 .semantic_small::before {
   position: absolute;
@@ -45,9 +47,11 @@
   margin-top: 15px;
 }
 .semantic_strong, 
+.semantic_a, 
 .semantic_em {
   padding: 1px;
 }
+
 .semantic_div {
   border: 1px solid #ff9900;
   background: #ffeedd;
@@ -75,17 +79,27 @@
 .semantic_strong {
   border: 1px solid #aa55ee;
   background: #e7ddfa;
-  padding-right: 35px;
+  padding-right: 40px;
   /* font-weight: normal; */
 }
 .semantic_strong::before {
   content: "strong";
   background: #aa55ee;
 }
+.semantic_a {
+  border: 1px solid #55a9ee;
+  background: #b1dcff;
+  padding-right: 10px;
+  /* font-weight: normal; */
+}
+.semantic_a::before {
+  content: "a";
+  background: #55a9ee;
+}
 .semantic_small {
   border: 1px solid #ee5583;
   background: #e7ddfa;
-  padding-right: 35px;
+  padding-right: 30px;
   /* font-weight: normal; */
 }
 .semantic_small::before {
@@ -105,7 +119,7 @@
 .semantic_em {
   border: 1px solid #ee88cc;
   background: #f6ccdd;
-  padding-right: 20px;
+  padding-right: 21px;
 }
 .semantic_em::before {
   content: "em";

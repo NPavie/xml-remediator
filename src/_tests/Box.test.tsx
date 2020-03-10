@@ -5,7 +5,7 @@ import input_document from "./resources/box_test_input.json";
 
 //import rename_test_document from "./resources/box_test_copy_rename.json";
 
-import { Box, BoxRenderMode, BoxType } from '../components/Box';
+import { Box, ContentCSS, BoxType } from '../components/Box';
 import QName from '../components/QName';
 
 it('parses a json document without errors', () => {

@@ -52,7 +52,6 @@ export default class BoxRemediation extends React.Component<BoxRemediationProper
                     action_parameters.map((arg:string) => {
                             if(arg.startsWith("Transformer.")){
                                 const property = arg.split('.')[1];
-                                // TODO rebind static properties from transformer (H1 use for tests)
                                 let transformer_property = undefined;
                                 Object.entries(Transformer).forEach((value,index)=>{
                                     if(value[0] === property){

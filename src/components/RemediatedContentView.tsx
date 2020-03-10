@@ -1,5 +1,5 @@
 import React, { Fragment } from "react";
-import { Box, BoxType, ContentCSS } from './Box';
+import { Box, BoxType, ContentCSS, Rendering } from './Box';
 
 import "./RemediatedContentView.css";
 
@@ -25,9 +25,12 @@ interface RemediatedContentViewProperties{
 }
 
 interface RemediatedContentViewState{
-    last_hovered_keys:Array<string>,
+    
+    hovered_fragment:BoxFragment | null,
     selected_keys:Array<string>,
-    hovered_fragment_index?:number
+    hovered_fragment_index?:number,
+    applied_remediations:Array<{range:BoxFragment,remediation:BoxRemediation, id:number}>,
+    available_remediations:Array<{range:BoxFragment,remediation:BoxRemediation, id:number}>
 }
 
 export default class RemediatedContentView extends React.Component<RemediatedContentViewProperties,RemediatedContentViewState>{
@@ -36,11 +39,27 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
 
     constructor(props:RemediatedContentViewProperties){
         super(props);
-        
+
+        let applied_remediations = new Array<{range:BoxFragment,remediation:BoxRemediation, id:number}>();
+        this.props.remediations_stack.forEach((value,index)=>{
+            if(value.is_activated){
+                applied_remediations.push({range:value.range, remediation:value.remediation,id:index});
+            }
+        });
+
+        let available_remediations = new Array<{range:BoxFragment,remediation:BoxRemediation, id:number}>();
+        this.props.remediations_stack.forEach((value,index)=>{
+            if(!value.is_activated){
+                available_remediations.push({range:value.range, remediation:value.remediation,id:index});
+            }
+        });
 
         this.state = {
-            last_hovered_keys:[],
-            selected_keys:[]
+            hovered_fragment: null,
+            
+            selected_keys:[],
+            applied_remediations:applied_remediations,
+            available_remediations:available_remediations,
         };
 
         // bound callbacks for sub components calls
@@ -48,29 +67,52 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
         this.isLeavingBox = this.isLeavingBox.bind(this);
     }
 
-    
-    
     /**
      * Called when hovering a box in a document
      * @param key 
      */
-    isHoveringBox(key:string){
+    isHoveringBox(key:string, is_result_key?:boolean){
+        let hovered_fragment = null;
+        let selected_document = is_result_key ? this.props.displayed_result : this.props.displayed_root;
+        let transformer = new Transformer(selected_document);
+        let fragment_found = transformer.getFragmentFromKey(key);
+        if(fragment_found.isPresent()){
+            hovered_fragment = fragment_found.value!;
+        }
         
         this.setState({
-            last_hovered_keys:[key]
+            hovered_fragment:hovered_fragment
         });
     }
 
     /**
-     * Calle when leaving a box in a document
+     * Called when leaving a box in a document
      * @param key 
      */
-    isLeavingBox(key:string){
+    isLeavingBox(key:string, is_result_key?:boolean){
+        let selected_document = is_result_key ? this.props.displayed_result : this.props.displayed_root;
+
         let elements = key.split('/');
-        let new_key = elements.slice(0,elements.length - 1).join("/");
+        
+        let hovered_box = undefined
+        do{
+            elements = elements.slice(0,elements.length - 1);
+            let new_key = elements.join("/");
+            hovered_box = selected_document.selectBox(new_key);
+        } while(hovered_box === undefined || hovered_box.rendering !== Rendering.DEFAULT)
+        
+        let hovered_key = hovered_box !== undefined ? hovered_box.key : "";
+        let hovered_fragment = null;
+        if(hovered_key.length > "/html[0]/body[0]".length){
+            let transformer = new Transformer(selected_document);
+            let fragment_found = transformer.getFragmentFromKey(hovered_key);
+            if(fragment_found.isPresent()){
+                hovered_fragment = fragment_found.value!;
+            }
+        }
 
         this.setState({
-            last_hovered_keys:new_key.length > "/html[0]/body[0]".length ? [new_key]:[]
+            hovered_fragment:hovered_fragment
         });
     }
 
@@ -78,17 +120,16 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
      * 
      * @param remediation_index 
      */
-    isHoveringRemediation(remediation_index:number){
+    isHoveringRange(hovered_range:BoxFragment){
         
-            this.setState({
-                hovered_fragment_index:remediation_index,
-                last_hovered_keys:this.getFragmentHoveredKeys(remediation_index)
-            });
+        this.setState({
+            hovered_fragment:hovered_range,
+        });
         
 
     }
 
-    getFragmentHoveredKeys(remediation_index:number){
+    getRemediationHoveredKeys(remediation_index:number){
         if(this.props.fragments_result_keys != null && this.props.fragments_root_keys != null){
             let hovered_keys = this.props.fragments_root_keys[remediation_index].slice();
             this.props.fragments_result_keys[remediation_index].forEach((key)=>{
@@ -102,11 +143,12 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
         } else return [];
     }
 
-    isLeavingRemediation(){
+    
+
+    isLeavingRange(){
         // Delete hovered stack key content
         this.setState({
-            hovered_fragment_index:undefined,
-            last_hovered_keys:[]
+            hovered_fragment:null
         });
     }
 
@@ -125,6 +167,27 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
      */
     onRemediationChange(remediation_index:number){
         if(this.props.onRemediationChangeCallback) this.props.onRemediationChangeCallback(remediation_index);
+    }
+
+    onRemediationRemove(applied_remediation_index:number){
+        let remediation = this.state.applied_remediations.splice(applied_remediation_index,1)[0];
+        this.state.available_remediations.push(remediation);
+        this.setState({
+            available_remediations:this.state.available_remediations.slice(),
+            applied_remediations:this.state.applied_remediations.slice(),
+        });
+        if(this.props.onRemediationChangeCallback) this.props.onRemediationChangeCallback(remediation.id);
+        
+    }
+
+    onRemediationApply(available_remediation_index:number){
+        let remediation = this.state.available_remediations.splice(available_remediation_index,1)[0];
+        this.state.applied_remediations.push(remediation);
+        this.setState({
+            available_remediations:this.state.available_remediations.slice(),
+            applied_remediations:this.state.applied_remediations.slice(),
+        });
+        if(this.props.onRemediationChangeCallback) this.props.onRemediationChangeCallback(remediation.id);
     }
 
     
@@ -167,10 +230,29 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
         
         let rows = new Array<JSX.Element>();
         let in_count = 0, out_count = 0,line_key = 0;
-        let hovered_keys = this.state.hovered_fragment_index ? 
-            this.getFragmentHoveredKeys(this.state.hovered_fragment_index) : 
-            this.state.last_hovered_keys;
+        //let hovered_keys = this.state.hovered_fragment_index ? 
+        //    this.getRemediationHoveredKeys(this.state.hovered_fragment_index) : 
+        //    this.state.last_hovered_keys;
+        // TODO : recompute hovered keys from the ne hovered fragments list
+        //console.log(this.state.hovered_fragments);
+        let hovered_fragment = this.state.hovered_fragment;
         
+        let hovered_keys = new Array<string>();
+        if(hovered_fragment != null){
+            // keys of the root document
+            hovered_keys = new Transformer(this.props.displayed_root).moveTo(
+                hovered_fragment.block,hovered_fragment.size,hovered_fragment.inline
+            ).getFragmentKeys();
+            
+            // + keys of the remediated document
+            new Transformer(this.props.displayed_result).moveTo(
+                hovered_fragment.block,hovered_fragment.size,hovered_fragment.inline
+            ).getFragmentKeys().forEach((value)=>{
+                hovered_keys.push(value);
+            });
+            //console.log(hovered_keys);
+        }
+
         while(in_count < in_rows.length || out_count < out_rows.length ){
             if(in_count >= in_rows.length){ // no more input line to render
                 // only render output line
@@ -180,8 +262,8 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
                             rendering_start_path:'/html[0]/body[0]',
                             use_semantic_css:this.props.content_css === ContentCSS.SEMANTIC,
                             hovering_pathes:hovered_keys,
-                            onMouseEnterCallback:this.isHoveringBox,
-                            onMouseLeaveCallback:this.isLeavingBox
+                            onMouseEnterCallback:(key:string)=>{this.isHoveringBox(key,true)},
+                            onMouseLeaveCallback:(key:string)=>{this.isLeavingBox(key,true)}
                             })}</td>
                         <td style={{verticalAlign:"top"}} key={`doc_leaf_${line_key}_in`}/>
                     </tr>);
@@ -196,8 +278,8 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
                             rendering_start_path:'/html[0]/body[0]',
                             use_semantic_css:this.props.content_css === ContentCSS.SEMANTIC,
                             hovering_pathes:hovered_keys,
-                            onMouseEnterCallback:this.isHoveringBox,
-                            onMouseLeaveCallback:this.isLeavingBox
+                            onMouseEnterCallback:(key:string)=>{this.isHoveringBox(key,false)},
+                            onMouseLeaveCallback:(key:string)=>{this.isLeavingBox(key,false)}
                             })}</td>
                     </tr>);
                 ++in_count;
@@ -233,13 +315,15 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
                                     rendering_start_path:'/html[0]/body[0]',
                                     use_semantic_css:this.props.content_css === ContentCSS.SEMANTIC,
                                     hovering_pathes:hovered_keys, 
-                                    onMouseEnterCallback:this.isHoveringBox,
-                                    onMouseLeaveCallback:this.isLeavingBox
+                                    onMouseEnterCallback:(key:string)=>{this.isHoveringBox(key,true)},
+                                    onMouseLeaveCallback:(key:string)=>{this.isLeavingBox(key,true)}
                                 })}</td>
                             <td style={{verticalAlign:"top"}} key={`doc_leaf_${line_key}_out`}>{in_rows[out_count].computeIsolatedReactNode({
                                     rendering_start_path:'/html[0]/body[0]',
                                     hovering_pathes:hovered_keys,
-                                    use_semantic_css:this.props.content_css === ContentCSS.SEMANTIC
+                                    use_semantic_css:this.props.content_css === ContentCSS.SEMANTIC,
+                                    onMouseEnterCallback:(key:string)=>{this.isHoveringBox(key,false)},
+                                    onMouseLeaveCallback:(key:string)=>{this.isLeavingBox(key,false)}
                                 })}</td>
                         </tr>
                     );
@@ -251,11 +335,11 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
                         <tr key={`doc_leaf_${line_key}`}>
                             <td style={{verticalAlign:"top"}} key={`doc_leaf_${line_key}_out`}/>
                             <td style={{verticalAlign:"top"}} key={`doc_leaf_${line_key}_in`}>{in_rows[in_count].computeIsolatedReactNode({
-                                rendering_start_path:'/html[0]/body[0]',
-                                use_semantic_css:this.props.content_css === ContentCSS.SEMANTIC,
-                                hovering_pathes:hovered_keys,
-                                onMouseEnterCallback:this.isHoveringBox,
-                                onMouseLeaveCallback:this.isLeavingBox
+                                    rendering_start_path:'/html[0]/body[0]',
+                                    use_semantic_css:this.props.content_css === ContentCSS.SEMANTIC,
+                                    hovering_pathes:hovered_keys,
+                                    onMouseEnterCallback:(key:string)=>{this.isHoveringBox(key,false)},
+                                    onMouseLeaveCallback:(key:string)=>{this.isLeavingBox(key,false)}
                                 })}</td>
                         </tr>);
                     ++in_count;
@@ -267,8 +351,8 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
                                 rendering_start_path:'/html[0]/body[0]',
                                 use_semantic_css:this.props.content_css === ContentCSS.SEMANTIC,
                                 hovering_pathes:hovered_keys,
-                                onMouseEnterCallback:this.isHoveringBox,
-                                onMouseLeaveCallback:this.isLeavingBox
+                                onMouseEnterCallback:(key:string)=>{this.isHoveringBox(key,true)},
+                                onMouseLeaveCallback:(key:string)=>{this.isLeavingBox(key,true)}
                                 })}</td>
                             <td style={{verticalAlign:"top"}} key={`doc_leaf_${line_key}_in`}/>
                         </tr>);
@@ -277,28 +361,44 @@ export default class RemediatedContentView extends React.Component<RemediatedCon
                 }
             }
         }
-        
-        let remediation_list = this.props.remediations_stack.map(
-                (value:{range:BoxFragment,remediation:BoxRemediation},index:number) => {
-                    return <li style={{listStyleType:"none",padding:"0"}} 
-                            onMouseEnter={()=>this.isHoveringRemediation(index)}
-                            onMouseLeave={()=>{this.isLeavingRemediation()}}>
-                        <input type="checkbox" 
+        /* <input type="checkbox" 
                                 checked={this.props.remediations_stack[index].is_activated} 
                                 onChange={()=>{this.onRemediationChange(index)}}/>
-                        <label>Apply on block {value.range.block}</label> : <br/>{value.remediation.render(this.props.remediations_stack[index].is_activated)}</li>;
+        */
+        let applied_remediations_list = this.state.applied_remediations.map(
+                (value:{range:BoxFragment,remediation:BoxRemediation},index:number) => {
+                    return <li style={{listStyleType:"none",padding:"0"}} 
+                            onMouseEnter={()=>this.isHoveringRange(value.range)}
+                            onMouseLeave={()=>{this.isLeavingRange()}}>
+                        <button style={{marginRight:"10px", padding:"1px"}} onClick={()=>{this.onRemediationRemove(index)}}>Remove</button>
+                        <label>On block {value.range.block}</label> : <br/>{value.remediation.render(this.props.remediations_stack[index].is_activated)}</li>;
+                });
+        let available_remediations_list = this.state.available_remediations.map(
+                (value:{range:BoxFragment,remediation:BoxRemediation},index:number) => {
+                    return <li style={{listStyleType:"none",padding:"0"}} 
+                            onMouseEnter={()=>this.isHoveringRange(value.range)}
+                            onMouseLeave={()=>{this.isLeavingRange()}}>
+                        <button style={{marginRight:"10px", padding:"1px"}}  onClick={()=>{this.onRemediationApply(index)}}>Apply</button>
+                        <label>On block {value.range.block}</label> : <br/>{value.remediation.render(this.props.remediations_stack[index].is_activated)}</li>;
                 });
 
         // on the result side, highlights fragment instead of boxes
         // on boxes hovering, 
         // check if the box is within a registered range (a range within the remediation stack)
         // if it is, higlight all the boxes in this range
+        
         return (
             <Fragment>
                 <section key="transfo_stack" className="transfo-stack" aria-label="Remediations suggestions">
-                    <header className="transfo-stack__head">Proposed remediations</header>
-                    <p style={{margin:"0"}}><small>(use the checkboxes to activate or deactivate a remediation)</small></p>
-                    <ul className="transfo-stack__list">{remediation_list}</ul>
+                    
+                    <section key="applied_transformations" style={{height:"50%"}}>
+                        <header className="transfo-stack__head">Applied remediations</header>
+                        <ul className="transfo-stack__list">{applied_remediations_list}</ul>
+                    </section>
+                    <section key="available_transformations" style={{height:"50%"}}>
+                        <header className="transfo-stack__head">Available remediations</header>
+                        <ul className="transfo-stack__list">{available_remediations_list}</ul>
+                    </section>
                 </section>
                 <section key="documents" className="documents" aria-label="Remediations preview" aria-description="test">
                     <table style={{width:"100%"}}>

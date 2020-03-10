@@ -24,8 +24,8 @@ export class BoxFilter{
 		return b ? b.isBlockAndHasNoBlockChildren() : true;
 	}
 
-	static isReplacedElementOrTextBox(b?: Box) {
-		return b ? b.props.text != null || b.props.isReplacedElement : true;
+	static isReplacedElementOrTextBox(b?: Box) {	
+		return b ? (b.hasText() || b.isReplacedElement()) : false;
 	}
 }
 
@@ -118,7 +118,10 @@ export default class BoxTreeWalker {
 		
 	}
 	
-	
+	/**
+	 * Move the current cursor up in the tree to the parent box element.
+	 * @returns the parent box, or an empty Optional<Box> if there is no such element.
+	 */
 	parent() : Optional<Box> {
 		if (this.path.length === 0) return BoxTreeWalker.noSuchElement;
 		else {
@@ -258,23 +261,27 @@ export default class BoxTreeWalker {
 		} else return BoxTreeWalker.noSuchElement;
 	}
 
+	/**
+	 * Search for the next descendant of the current box that match the filter
+	 * @param filter 
+	 */
 	firstDescendant(filter:(node?:Box)=>boolean) : Optional<Box> {
 		let startDepth = this.path.length;
 		let keep_seeking = true;
 		while (keep_seeking) {
 			let next = this.firstChild();
-			if (!next.isPresent()){
+			if (!next.isPresent()){ // no children in the current node
 				if (this.path.length === startDepth) return BoxTreeWalker.noSuchElement;
-				else {
+				else { // check next sibling
 					next = this.nextSibling();
-					if (!next.isPresent()) {
+					if (!next.isPresent()) { // no sibling found for the current node
 						let keep_seeking_up = true;
-						while (keep_seeking_up){ 
+						while (keep_seeking_up){  // we go up until we found a parent sibling
 							next = this.parent();
-							if (next.isPresent()) {
+							if (next.isPresent()) { // parent found
 								if (this.path.length === startDepth) return BoxTreeWalker.noSuchElement;
-								next = this.nextSibling();
-								if (next.isPresent()) keep_seeking_up = false;;
+								next = this.nextSibling(); // next sibling of the parent
+								if (next.isPresent()) keep_seeking_up = false;
 							} else keep_seeking_up = false;;
 						}
 					}

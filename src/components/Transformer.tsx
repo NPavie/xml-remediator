@@ -101,10 +101,7 @@ export default class Transformer {
 		else {
 			doc = Transformer.moveNBlocks(doc, n + 1);
 			if (fragment.inline >= 0) {
-				let isReplacedElementOrTextBox = (b?: Box) => {
-					return b ? (b.hasText() || b.isReplacedElement()) : false;
-				};
-				let c = Transformer.count(doc, isReplacedElementOrTextBox);
+				let c = Transformer.count(doc, BoxFilter.isReplacedElementOrTextBox);
 				Transformer.assertThat(fragment.inline < c, `${fragment.inline} < ${c}`);
 				Transformer.assertThat(doc.firstDescendant(BoxFilter.isReplacedElementOrTextBox).isPresent());
 				for (let i = 0; i < fragment.inline; ++i) {
@@ -682,10 +679,12 @@ export default class Transformer {
 		return doc;
 	}
 
-
+	///
+	/// REACT RENDERING UTILITIES
+	///
 
 	/**
-	 * Retrieve the keys of the elements selected by a BoxFragmenet
+	 * Retrieve the keys of the elements selected by a BoxFragment
 	 * @param doc root box of the document to be 
 	 * @param frag 
 	 */
@@ -694,16 +693,110 @@ export default class Transformer {
 		this.doc.root();
 		this.doc = this.moveToRange(this.doc,this.transformedFragment);
 		keys.push(this.doc.current().key);
-		let nb_box = 1;
-		let child:Optional<Box>;
-		while((child = this.doc.nextSibling()).isPresent() 
-				&& nb_box <= this.transformedFragment.size){
-			keys.push(child.value!.key);
-			++nb_box;
+		let box_count = 1;
+		let sibling:Optional<Box>;
+		while((sibling = this.doc.nextSibling()).isPresent() 
+				&& box_count < this.transformedFragment.size){
+			keys.push(sibling.value!.key);
+			++box_count;
+		}
+		
+		// Check if the list of siblings is equal to the children of an upper parent
+		let keys_are_parent_children_keys = true;
+		while(keys_are_parent_children_keys && this.doc.parent().isPresent() ){
+			//let children_keys = new Array<string>();
+			let parent_key = this.doc.current().key;
+			let children = this.doc.current().children;
+			let i = 0;
+			while(children.hasNext() && keys_are_parent_children_keys){
+				keys_are_parent_children_keys = i < keys.length ? children.next().value!.key === keys[i] : false;
+				i++;
+			}
+			// if the children keys matches
+			if(keys_are_parent_children_keys){
+				keys = [parent_key];
+			}
 		}
 		return keys;		
 		
 	}
+
+	/**
+	 * return an optional fragment selected by a key.
+	 * An empty optional value is returned if no element is found
+	 * @param key 
+	 */
+	getFragmentFromKey(key:string):Optional<BoxFragment>{
+		this.doc.root();
+		let iterate_over_blocks = true;
+		let block_start = -1;
+		let block_size = 0;
+		let block_id = 0;
+		let block_count = Transformer.count(this.doc,BoxFilter.isBlockAndHasNoBlockChildren)
+		// For each block of the document or until the block range is found
+		while(iterate_over_blocks && block_id < block_count){
+			this.doc = Transformer.moveNBlocks(this.doc, 1);
+			let block_key = this.doc.current().key;
+			if(key.startsWith(block_key)){ // key is the block key or a sub key of it
+				iterate_over_blocks = false;
+				if(key === block_key){ // key is the current block key, so return the block as is
+					return Optional.of<BoxFragment>(new BoxFragment({block:block_id}));
+				} else {
+					// key is a subkey of the block, so check if it has a descendent
+					let inline_count = Transformer.count(this.doc,BoxFilter.isReplacedElementOrTextBox);
+					let iterate_over_inlines = true;
+					let inline_start = -1;
+					let inline_size = 0;
+					let inline_id = 0;
+					while(iterate_over_inlines && inline_id < inline_count){
+						if(this.doc.firstDescendant(BoxFilter.isReplacedElementOrTextBox).isPresent()
+								|| this.doc.firstFollowing(BoxFilter.isReplacedElementOrTextBox).isPresent() ){
+							// position the document on the next inline element and parse it
+							let inline_key = this.doc.current().key;
+							
+							if(key.startsWith(inline_key)){
+								// key is a subkey of inline or (most probably) is the inline key
+								inline_start = inline_id;
+								inline_size = 1;
+								iterate_over_inlines = false;
+							} else if(inline_key.startsWith(key)){
+								// key is between the block and the current inline
+								// select the current inline
+								inline_start = inline_start === -1 ? inline_id : inline_start;
+								inline_size++;
+							} else if(inline_start >= 0){
+								// this inline is not concerned but previous selection occured
+								iterate_over_inlines = false;
+
+							} // if nothing else, check the next block
+							inline_id++;
+						} else { // no more inlines to parse, stop iteration
+							iterate_over_inlines = false;
+						}
+					}
+					if(inline_start >= 0){
+						return Optional.of<BoxFragment>(new BoxFragment({block:block_id, inline:inline_start}, inline_size)); 
+					}
+				}
+			} else if (block_key.startsWith(key)){
+				// block key is a sub key of the key param, with possibly other fragment included by the key param
+				// keep the starting block if not defined, and increment the size of the block selection
+				block_start = block_start === -1 ? block_id : block_start
+				block_size++;
+				 
+			} else if (block_start >= 0){
+				// the current block is not related to the key, but a previous selection occured
+				// stop the selection process
+				iterate_over_blocks = false;
+			}
+			block_id++;
+		}
+		if(block_start >= 0) { 
+			return Optional.of<BoxFragment>(new BoxFragment({block:block_start}, block_size));
+		} else return Optional.empty<BoxFragment>();
+	}
+
+
 	
 	
 

@@ -27,4 +27,10 @@ export default class BoxFragment {
         return `b${this.block}${this.inline > -1 ? "-i"+this.inline : ""}-s${this.size}`;
     }
 
+    equals(fragment:BoxFragment){
+        return this.block === fragment.block && 
+            this.inline === fragment.inline && 
+            this.size === fragment.size;
+    }
+
 };

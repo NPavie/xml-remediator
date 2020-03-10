@@ -1,7 +1,6 @@
 /**
  * Box document model
  * 
- * #TODO :
  */
 
 import ListIterator from "./ListIterator";
@@ -118,9 +117,9 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		this.key = path + (props.parent_index ? `[${props.parent_index}]` : "[0]");
 		
 		this.state = {
-			is_selected: props.selected_keys != null ? this.hasKeyInList(props.selected_keys) : false,
+			is_selected: props.selected_keys != null ? this.isInKeyList(props.selected_keys) : false,
 			is_focused:false,
-			is_hovered:props.hovered_keys != null ? this.hasKeyInList(props.hovered_keys) : false 
+			is_hovered:props.hovered_keys != null ? this.isInKeyList(props.hovered_keys) : false 
 		};
 	}
 
@@ -225,7 +224,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		}
 		
 		let newBox = new Box(new_props);
-		newBox.rendering = (with_new.rendering) ? with_new.rendering : this.rendering;
+		newBox.rendering = (with_new.rendering != null) ? with_new.rendering : this.rendering;
 		newBox._hasText = this._hasText;
 		newBox._isBlockAndHasNoBlockChildren = this._isBlockAndHasNoBlockChildren;
 
@@ -312,9 +311,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 	/** REACT RENDERING SECTION */
 
 	/**
-	 * TODO: 
-	 * - Add box selector callback 
-	 * - Add box hovering
+	 * #TODO update computeHtml method (sync with computeReactNode)
 	 * - 
 	 * Reconstruct the box hierarchy as xml within a string.
 	 * @param args.rendering_start_path path from which the rendering should start.
@@ -369,7 +366,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 					cssInlined += '"';
 				}
 				let cssClass = "";
-				if( (args.hovering_pathes ? this.hasKeyInList(args.hovering_pathes) : false) ){
+				if( (args.hovering_pathes ? this.isInKeyList(args.hovering_pathes) : false) ){
 					cssClass += "hovered ";
 				}
 				if(args.use_semantic_css && this.props.name){
@@ -462,7 +459,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		onMouseLeaveCallback?:(hovered_key:string)=>void,
 		onSelectionCallback?:(selected_key:string)=>void
 	}):React.FunctionComponentElement<{}> | React.DOMElement<any,Element> | ReactElement<{}>{
-		if (this.key.startsWith(args.rendering_start_path) && this.rendering !== Rendering.SKIP){ // Node to render
+		if (this.key.startsWith(args.rendering_start_path) && this.rendering === Rendering.DEFAULT){ // Node to render
 			// render block and its children
 			if(this.props.name){
 				let node_name = this.props.name.prefix ? 
@@ -504,7 +501,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 					cssInlined += '"';
 				}
 				let cssClasses = new Array<string>();
-				if( (args.hovering_pathes ? this.hasKeyInList(args.hovering_pathes) : false) || this.state.is_hovered ){
+				if( (args.hovering_pathes ? this.isInKeyList(args.hovering_pathes) : false) || this.state.is_hovered ){
 					cssClasses.push("hovered");
 				}
 				if(args.use_semantic_css && this.props.name){
@@ -552,7 +549,7 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 					return React.createElement(React.Fragment,null,this.props.text);
 				} else return React.createElement(React.Fragment); // Empty anonymous node
 			} 
-		} else if(this.props.children.length > 0){ // anonymous node with children
+		} else if(this.props.children.length > 0 && this.rendering !== Rendering.SKIP){ // anonymous node with children
 			return React.createElement(React.Fragment,null, 
 				this.props.children.map((b:Box)=>{
 					return b.computeReactNode(args);
@@ -607,21 +604,44 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 			}
 	):React.FunctionComponentElement<{}> | React.DOMElement<any,Element> | ReactElement<{}>{
 		if (this.key.startsWith(args.rendering_start_path)){
-			let tags = this.key.substring(args.rendering_start_path.length).split('/').slice(1);
-			tags = tags.slice(0,tags.length - 1);
+			let keys = this.key.substring(args.rendering_start_path.length).split('/').slice(1);
+			keys = keys.slice(0,keys.length - 1);
 			let stack = [];
-			for(let tag of tags){
-				tag = tag.split('[')[0];
-				stack.push(tag);
+			for(let key of keys){
+				stack.push(key);
+				
 			}
 			let rendered_node = this.computeReactNode(args);
 			while(stack.length > 0 ){
-				let tag = stack.pop()!;
-				let cssClass = args.use_semantic_css ? `semantic_${tag}` : "";
+				let key = stack.pop()!;
+				let tag = key.split('[')[0];
+				// recomputed complete node key
+				key = args.rendering_start_path + "/" + stack.join('/') + key;
+				let css_classes = new Array<string>();
+				if(args.use_semantic_css) css_classes.push(`semantic_${tag}`);
+				// check if the element is in the hovered keys
+				if(args.hovering_pathes != null && Box.keyIsInList(key,args.hovering_pathes)){
+					css_classes.push("hovered");
+				}
+				// TODO : selection test for css class
+
+				let cssClass = css_classes.join(" ");
 				
-				rendered_node = React.createElement(tag,{
-					className:cssClass
-				}, rendered_node);
+				let attributes:any = {};
+				attributes.className = cssClass;
+				attributes.id = key;
+				// Adding event callbacks
+				if(args.onMouseEnterCallback){
+					attributes.onMouseEnter = (()=>{args.onMouseEnterCallback!(key)});
+				}
+				if(args.onMouseEnterCallback){
+					attributes.onMouseLeave = (()=>{args.onMouseLeaveCallback!(key)});
+				}
+				if(args.onSelectionCallback){
+					attributes.onClick = (() => {args.onSelectionCallback!(key)});
+				}
+
+				rendered_node = React.createElement(tag,attributes, rendered_node);
 			}
 			return rendered_node;
 		} else return React.createElement(React.Fragment); // Empty anonymous node
@@ -758,9 +778,9 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 
 
 	/**
-	 * Update the keys
-	 * @param parent_key 
-	 * @param index 
+	 * Recompute the keys of the boxtree
+	 * @param parent_key current parent key
+	 * @param index current index of the box within its parent children list
 	 */
 	updateKeys(parent_key?:string, index:number = 0){
 		this.key = `${parent_key != null ? parent_key : ""}/${(this.props.name != null ? this.props.name.localPart : "text()")}[${index}]`;
@@ -776,9 +796,13 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		//}
 	}
 
-	static parse(jsonString:string){
+	/**
+	 * reconstruct a box object from a serialized one
+	 * @param json_box the serialized box object
+	 */
+	static parse(json_box:string):Box{
 		let box = new Box(JSON.parse(
-				jsonString,
+				json_box,
 				(key:any, value:any) => {
 					if (key === 'children')
 						return value.map((v:BoxInterface) => {
@@ -803,10 +827,10 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 	}
 
 	/**
-	 * 
+	 * Retrieve the keys of the box and all its descendants
 	 * @param existing_keys keys array reference. if not defined, a new one is created and return
 	 */
-	getKeys(existing_keys?:Array<string>){
+	getKeys(existing_keys?:Array<string>):Array<string>{
 		let keys_array = existing_keys != null ? existing_keys : new Array<string>();
 		keys_array.push(this.key);
 		for(let child of this.children){
@@ -815,14 +839,27 @@ export class Box extends React.Component<BoxInterface, BoxState> {
 		return keys_array;
 	}
 
-	hasKeyInList(keys_list:Array<string>){
+	/**
+	 * Check if the box key is within a specified list of keys.
+	 * Beware that the key is considered to be in the list if its key or an ancestor's one is in the list.
+	 * @param keys_list 
+	 */
+	isInKeyList(keys_list:Array<string>):boolean{
+		return Box.keyIsInList(this.key,keys_list);
+	}
+	
+	/**
+	 * (Utility function) Check if a key is in a list
+	 * @param searched_key 
+	 * @param keys_list 
+	 */
+	static keyIsInList(searched_key:string,keys_list:Array<string>):boolean{
 		for(let key of keys_list){
-			if(this.key.startsWith(key)){ 
+			if(searched_key.startsWith(key)){ 
 				return true;
 			}
 		}
 		return false;
 	}
-	
 
 }
